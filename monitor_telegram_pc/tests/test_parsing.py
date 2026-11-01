@@ -125,10 +125,50 @@ class ParsingTests(unittest.TestCase):
         self.assertTrue(offer["condicoes"])
 
     def test_conditional_discount_not_assumed_pix(self):
-        offer = parse("RX 9070 XT R$ 4.499,99 no PIX (R$ 4.049,99 com o cupom TESTE)")[0]
+        offer = parse("RX 9070 XT R$ 4.499,99 no PIX\nR$ 4.049,99 com o cupom TESTE")[0]
         self.assertEqual(offer["pix_centavos"], 449999)
         self.assertEqual(offer["anunciado_centavos"], 404999)
         self.assertTrue(offer["verificar"])
+
+    def test_explicit_parenthesized_coupon_uses_pix_payment(self):
+        from finance import evaluate_offer
+        from settings import load_config
+        text = ("Processador AMD Ryzen 7 7800X3D, 8-Core, SMT, AM5\n"
+                "R$ 1.849,99 no PIX (R$ 1.683,49 com o cupom THEKING)\n"
+                "Loja: KaBuM!\nhttps://www.kabum.com.br/produto/426262\n"
+                "Menor preço em 90 dias: R$ 1.699,00\n"
+                "Mediana dos preços de 90 dias: R$ 1.978,90")
+        offer = parse(text)[0]
+        self.assertEqual(offer['pix_centavos'], 168349)
+        self.assertIsNone(offer['cartao_centavos'])
+        self.assertIsNone(offer['anunciado_centavos'])
+        self.assertEqual(offer['cupom'], 'THEKING')
+        self.assertFalse(offer['verificar'])
+        self.assertEqual(offer['texto'], text)
+        self.assertTrue(any('não verificada' in c for c in offer['condicoes']))
+        evaluation = evaluate_offer(offer, load_config(), [])
+        self.assertEqual(evaluation['classificacao'], 'BOA PROMOÇÃO')
+        self.assertEqual(evaluation['diferenca_centavos'], -1651)
+
+    def test_pix_coupon_does_not_change_card_total(self):
+        offer = parse('Ryzen 7 7800X3D\nR$ 1.849,99 no PIX (R$ 1.683,49 com o cupom THEKING)\nCartão: R$ 1.999,00')[0]
+        self.assertEqual(offer['pix_centavos'], 168349)
+        self.assertEqual(offer['cartao_centavos'], 199900)
+
+    def test_coupon_eligibility_still_requires_verification(self):
+        offer = parse('Ryzen 7 7800X3D R$ 1.849,99 no PIX (R$ 1.683,49 com o cupom THEKING)\nExclusivo para primeira compra')[0]
+        self.assertEqual(offer['pix_centavos'], 168349)
+        self.assertTrue(offer['verificar'])
+
+    def test_card_coupon_does_not_inherit_pix(self):
+        offer = parse('Ryzen 7 7800X3D R$ 1.849,99 no PIX (R$ 1.683,49 no cartão com o cupom THEKING)')[0]
+        self.assertEqual(offer['pix_centavos'], 184999)
+        self.assertEqual(offer['cartao_centavos'], 168349)
+
+    def test_inconsistent_coupon_amount_not_accepted_as_pix(self):
+        offer = parse('Ryzen 7 7800X3D R$ 1.600,00 no PIX (R$ 1.683,49 com o cupom THEKING)')[0]
+        self.assertEqual(offer['pix_centavos'], 160000)
+        self.assertTrue(offer['verificar'])
 
     def test_targets_and_explicit_alternative(self):
         config = {"metas": {"Ryzen 7 7800X3D": 1600}, "alternativas": [{"modelo": "Air Cooler Modelo ABC", "categoria": "COOLER-CPU", "padrao": "Modelo ABC", "meta": 180}]}

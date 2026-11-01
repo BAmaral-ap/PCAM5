@@ -165,6 +165,25 @@ def _prices(text: str) -> dict[str, Any]:
         line = HISTORY_RE.split(original, maxsplit=1)[0]
         if not line.strip():
             continue
+        # A parenthesized coupon amount qualifies the immediately preceding PIX
+        # total. Only this explicit structure supplies payment context; a coupon
+        # price elsewhere in the message still has an unknown payment method.
+        coupon_pix = re.compile(
+            r"R\$\s*(?P<base>\d[\d.,]*)\s+(?:no|via|por|em)\s+PIX\s*"
+            r"\(\s*R\$\s*(?P<final>\d[\d.,]*)\s+com\s+(?:o\s+)?cupom\s+"
+            r"[`\"']?(?P<code>[A-Za-z0-9][A-Za-z0-9_-]{3,})[`\"']?\s*\)", re.I)
+
+        def coupon_total(match):
+            base, final = cents(match['base']), cents(match['final'])
+            if base is None or final is None or final > base:
+                verify.append("Preço com cupom inconsistente; conferir valor final")
+                return match[0]
+            conditions.append(
+                f"PIX anunciado com cupom {match['code'].upper()}: {brl(final / 100)}; "
+                f"sem cupom: {brl(base / 100)}. Aplicação do cupom não verificada.")
+            return f"R$ {match['final']} no PIX"
+
+        line = coupon_pix.sub(coupon_total, line)
         for match in INSTALLMENT_RE.finditer(line):
             unit = cents(match[2])
             count = int(match[1])
