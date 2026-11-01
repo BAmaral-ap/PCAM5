@@ -254,6 +254,16 @@ Pare o monitor antes de copiar o banco para backup. Durante a execução, arquiv
 
 ## 7. Recuperação e limites de entrega
 
+### Análise opcional com Gemini
+
+Adicione `GEMINI_API_KEY` ao `.env` local, sem aspas e sem compartilhar a chave. A configuração `gemini` em `config.json` ativa a análise, seleciona `gemini-2.5-flash-lite` e limita a 20 tentativas automáticas por dia UTC neste banco. O modelo precisa estar disponível para sua chave e seu projeto; a disponibilidade e as cotas gratuitas são definidas pelo Google e podem mudar. Desative com `"ativado": false` ou ajuste o modelo e o limite. Esse limite local não substitui os controles de faturamento e cotas do Google, nem inclui chamadas feitas por outros programas ou bancos.
+
+```powershell
+.\.venv\Scripts\python.exe monitor.py --test-gemini
+```
+
+O teste envia uma oferta fictícia ao Gemini e mostra a resposta no terminal; não envia ao Telegram e não entra no limite diário automático. Cada execução consome uma solicitação da API. Nas ofertas reais, somente alertas selecionados após deduplicação são analisados. O texto preparado do alerta, incluindo dados de orçamento e condições da oferta, é enviado ao Google; links e dados da sessão não são enviados. A resposta é um comentário adicional, que pode conter erros; a classificação, os preços e o orçamento continuam locais. Em caso de erro, tempo esgotado ou cota local atingida, o alerta local é enviado normalmente. O Gemini não verifica carrinho nem compra produtos. `--test-alert` continua sendo um teste independente do Telegram.
+
 - Cursores persistidos retomam a leitura após falhas sem gerar ofertas duplicadas por reinicialização.
 - `FloodWait` e limites da Bot API são respeitados. Falhas transitórias são retomadas; erros de autenticação/permissão exigem correção local.
 - Logs rotativos ficam em `logs/monitor.log`, sem impressão intencional de tokens, credenciais ou URLs autenticadas.

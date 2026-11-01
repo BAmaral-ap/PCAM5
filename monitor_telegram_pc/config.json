@@ -127,5 +127,10 @@
       "observacao": "Plataforma prevista; ainda exige confirmação manual de BIOS, dimensões, memória e conectores."
     }
   },
-  "observacao_orcamento": "R$ 1.500 no cartão para RAM é estimativa de planejamento configurável, não preço parcelado verificado. Demais preços no cartão desconhecidos. Juros, frete e acessórios devem entrar no total confirmado da compra. Parcelas são compromissos de renda futura, não saldo PIX."
+  "observacao_orcamento": "R$ 1.500 no cartão para RAM é estimativa de planejamento configurável, não preço parcelado verificado. Demais preços no cartão desconhecidos. Juros, frete e acessórios devem entrar no total confirmado da compra. Parcelas são compromissos de renda futura, não saldo PIX.",
+  "gemini": {
+    "ativado": true,
+    "modelo": "gemini-2.5-flash-lite",
+    "limite_diario": 20
+  }
 }

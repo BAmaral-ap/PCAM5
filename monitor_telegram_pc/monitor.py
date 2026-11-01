@@ -119,7 +119,7 @@ async def async_main(args, cfg, store):
                     await client.connect()
                 await collect_once(client, store, cfg, args.limit, args.days, notifier is not None)
                 if notifier:
-                    await deliver_pending(store, notifier, cfg.get('idade_maxima_alerta_minutos', 30))
+                    await deliver_pending(store, notifier, cfg.get('idade_maxima_alerta_minutos', 30), cfg.get('gemini'))
                 store.export_csv(HERE / 'dados' / 'ofertas_monitor.csv')
             except (ConnectionError, OSError, asyncio.TimeoutError):
                 LOG.warning('Falha de conexão ou arquivo; estado persistido será reutilizado na próxima consulta.')
@@ -150,6 +150,7 @@ def main(argv=None):
     actions.add_argument('--login', action='store_true', help='Autenticação interativa somente se necessária')
     actions.add_argument('--dry-run', action='store_true', help='Exibir alerta fictício offline')
     actions.add_argument('--test-alert', action='store_true', help='Enviar um alerta fictício ao chat privado')
+    actions.add_argument('--test-gemini', action='store_true', help='Testar Gemini com oferta fictícia, sem enviar ao Telegram')
     actions.add_argument('--bot-chat-id', action='store_true', help='Mostrar IDs privados após /start no bot, sem exibir tokens')
     actions.add_argument('--budget', action='store_true')
     actions.add_argument('--history', metavar='MODELO')
@@ -174,6 +175,18 @@ def main(argv=None):
         if args.dry_run:
             print(demo(cfg))
             return
+        if args.test_gemini:
+            from gemini import explain
+            key = os.getenv('GEMINI_API_KEY', '').strip()
+            if not key:
+                raise ValueError('Configure GEMINI_API_KEY no .env local.')
+            try:
+                print('Análise Gemini de oferta fictícia:')
+                print(explain(demo(cfg), key, cfg.get('gemini', {}).get('modelo', 'gemini-2.5-flash-lite')))
+            except Exception:
+                print('Gemini indisponível: confira conexão, chave, modelo e cota.', file=sys.stderr)
+                return 1
+            return 0
         if args.bot_chat_id:
             token = os.getenv('TELEGRAM_BOT_TOKEN', '')
             if not token:

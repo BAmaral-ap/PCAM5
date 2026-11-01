@@ -35,7 +35,7 @@ def setup_logging(directory: Path):
     class Redact(logging.Filter):
         def filter(self, record):
             message = record.getMessage()
-            for name in ('TELEGRAM_API_ID', 'TELEGRAM_API_HASH', 'TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID'):
+            for name in ('TELEGRAM_API_ID', 'TELEGRAM_API_HASH', 'TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID', 'GEMINI_API_KEY'):
                 value = os.getenv(name)
                 if value:
                     message = message.replace(value, '[protegido]')
@@ -153,7 +153,7 @@ async def collect_once(client, store, cfg, limit=150, days=7, notifications_enab
     return count
 
 
-async def deliver_pending(store, notifier, max_age_minutes=30):
+async def deliver_pending(store, notifier, max_age_minutes=30, gemini_config=None):
     retry_at = store.get_meta('bot_retry_at')
     if retry_at and utcnow() < timestamp(retry_at):
         return
@@ -170,8 +170,23 @@ async def deliver_pending(store, notifier, max_age_minutes=30):
             return
         if not store.claim_notification(item['id']):
             continue
+        payload = item['payload']
+        settings = gemini_config or {}
+        key = os.getenv('GEMINI_API_KEY', '').strip()
+        limit = settings.get('limite_diario', 20)
+        day_key = 'gemini_calls:' + utcnow().date().isoformat()
+        used = store.get_meta(day_key, 0)
+        if settings.get('ativado') and key and isinstance(limit, int) and 0 < limit <= 1000 and used < limit:
+            # Count attempts before the request, including failures and restarts.
+            store.set_meta(day_key, used + 1)
+            try:
+                from gemini import explain
+                comment = await asyncio.to_thread(explain, payload, key, settings.get('modelo', 'gemini-2.5-flash-lite'))
+                payload = payload[:3200] + '\n\nAnálise Gemini (gerada por IA; confira):\n' + comment
+            except Exception:
+                LOG.warning('Gemini indisponível; enviando análise local. Confira chave, modelo e cota.')
         try:
-            await asyncio.to_thread(notifier.send, item['payload'])
+            await asyncio.to_thread(notifier.send, payload)
         except DeliveryError as exc:
             state = 'uncertain' if exc.uncertain else 'pending'
             store.finish_notification(item['id'], state)
