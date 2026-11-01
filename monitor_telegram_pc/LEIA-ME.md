@@ -256,7 +256,7 @@ Pare o monitor antes de copiar o banco para backup. Durante a execução, arquiv
 
 ### Análise opcional com Gemini
 
-Adicione `GEMINI_API_KEY` ao `.env` local, sem aspas e sem compartilhar a chave. A configuração `gemini` em `config.json` ativa a análise, seleciona `gemini-2.5-flash-lite` e limita a 20 tentativas automáticas por dia UTC neste banco. O modelo precisa estar disponível para sua chave e seu projeto; a disponibilidade e as cotas gratuitas são definidas pelo Google e podem mudar. Desative com `"ativado": false` ou ajuste o modelo e o limite. Esse limite local não substitui os controles de faturamento e cotas do Google, nem inclui chamadas feitas por outros programas ou bancos.
+Adicione `GEMINI_API_KEY` ao `.env` local, sem aspas e sem compartilhar a chave. A configuração `gemini` em `config.json` ativa a análise, seleciona `gemini-3.5-flash-lite` e limita a 20 tentativas automáticas por dia UTC neste banco. O modelo precisa estar disponível para sua chave e seu projeto; a disponibilidade e as cotas gratuitas são definidas pelo Google e podem mudar. Desative com `"ativado": false` ou ajuste o modelo e o limite. Esse limite local não substitui os controles de faturamento e cotas do Google, nem inclui chamadas feitas por outros programas ou bancos.
 
 ```powershell
 .\.venv\Scripts\python.exe monitor.py --test-gemini

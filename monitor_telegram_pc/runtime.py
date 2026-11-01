@@ -181,7 +181,7 @@ async def deliver_pending(store, notifier, max_age_minutes=30, gemini_config=Non
             store.set_meta(day_key, used + 1)
             try:
                 from gemini import explain
-                comment = await asyncio.to_thread(explain, payload, key, settings.get('modelo', 'gemini-2.5-flash-lite'))
+                comment = await asyncio.to_thread(explain, payload, key, settings.get('modelo', 'gemini-3.5-flash-lite'))
                 payload = payload[:3200] + '\n\nAnálise Gemini (gerada por IA; confira):\n' + comment
             except Exception:
                 LOG.warning('Gemini indisponível; enviando análise local. Confira chave, modelo e cota.')

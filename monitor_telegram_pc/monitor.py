@@ -200,7 +200,7 @@ def main(argv=None):
                 raise ValueError('Configure GEMINI_API_KEY no .env local.')
             try:
                 print('Análise Gemini de oferta fictícia:')
-                print(explain(demo(cfg), key, cfg.get('gemini', {}).get('modelo', 'gemini-2.5-flash-lite')))
+                print(explain(demo(cfg), key, cfg.get('gemini', {}).get('modelo', 'gemini-3.5-flash-lite')))
             except GeminiError as exc:
                 print(f'Gemini indisponível: {exc}', file=sys.stderr)
                 return 1
