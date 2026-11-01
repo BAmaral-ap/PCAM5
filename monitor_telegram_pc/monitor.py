@@ -176,13 +176,16 @@ def main(argv=None):
             print(demo(cfg))
             return
         if args.test_gemini:
-            from gemini import explain
+            from gemini import GeminiError, explain
             key = os.getenv('GEMINI_API_KEY', '').strip()
             if not key:
                 raise ValueError('Configure GEMINI_API_KEY no .env local.')
             try:
                 print('Análise Gemini de oferta fictícia:')
                 print(explain(demo(cfg), key, cfg.get('gemini', {}).get('modelo', 'gemini-2.5-flash-lite')))
+            except GeminiError as exc:
+                print(f'Gemini indisponível: {exc}', file=sys.stderr)
+                return 1
             except Exception:
                 print('Gemini indisponível: confira conexão, chave, modelo e cota.', file=sys.stderr)
                 return 1

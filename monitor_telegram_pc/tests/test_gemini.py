@@ -3,11 +3,12 @@ import json
 import os
 import tempfile
 import unittest
+import urllib.error
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 
-from gemini import explain
+from gemini import GeminiError, explain
 from runtime import deliver_pending
 from storage import Store
 
@@ -23,8 +24,23 @@ class GeminiTests(unittest.TestCase):
 
     def test_empty_response_and_invalid_model(self):
         with patch('urllib.request.urlopen', return_value=io.BytesIO(b'{"candidates":[]}')):
-            with self.assertRaises(ValueError): explain('oferta', 'fake', 'gemini-2.5-flash-lite')
+            with self.assertRaises(GeminiError): explain('oferta', 'fake', 'gemini-2.5-flash-lite')
         with self.assertRaises(ValueError): explain('oferta', 'fake', '../../bad')
+
+    def test_http_errors_are_useful_and_never_expose_response(self):
+        for code in (400, 403, 404, 429, 500):
+            error = urllib.error.HTTPError('https://example.com/secret', code, 'secret', {}, io.BytesIO(b'secret'))
+            with self.subTest(code=code), patch('urllib.request.urlopen', side_effect=error):
+                with self.assertRaises(GeminiError) as caught:
+                    explain('oferta', 'secret', 'gemini-2.5-flash-lite')
+                self.assertIn(str(code), str(caught.exception))
+                self.assertNotIn('secret', str(caught.exception))
+
+    def test_token_exhaustion_is_diagnosed(self):
+        data = {'candidates': [{'finishReason': 'MAX_TOKENS', 'content': {'parts': []}}]}
+        with patch('urllib.request.urlopen', return_value=io.BytesIO(json.dumps(data).encode())):
+            with self.assertRaisesRegex(GeminiError, 'limite de geração'):
+                explain('oferta', 'fake', 'gemini-2.5-flash-lite')
 
 class DeliveryTests(unittest.IsolatedAsyncioTestCase):
     async def test_gemini_failure_keeps_local_alert_and_caps_calls(self):
