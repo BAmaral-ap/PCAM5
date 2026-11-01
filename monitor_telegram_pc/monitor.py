@@ -151,6 +151,7 @@ def main(argv=None):
     actions.add_argument('--dry-run', action='store_true', help='Exibir alerta fictício offline')
     actions.add_argument('--test-alert', action='store_true', help='Enviar um alerta fictício ao chat privado')
     actions.add_argument('--test-gemini', action='store_true', help='Testar Gemini com oferta fictícia, sem enviar ao Telegram')
+    actions.add_argument('--list-gemini-models', action='store_true', help='Listar modelos disponíveis para a chave Gemini')
     actions.add_argument('--bot-chat-id', action='store_true', help='Mostrar IDs privados após /start no bot, sem exibir tokens')
     actions.add_argument('--budget', action='store_true')
     actions.add_argument('--history', metavar='MODELO')
@@ -175,6 +176,23 @@ def main(argv=None):
         if args.dry_run:
             print(demo(cfg))
             return
+        if args.list_gemini_models:
+            from gemini import GeminiError, list_models
+            key = os.getenv('GEMINI_API_KEY', '').strip()
+            if not key:
+                raise ValueError('Configure GEMINI_API_KEY no .env local.')
+            try:
+                models = list_models(key)
+            except GeminiError as exc:
+                print(f'Não foi possível listar modelos: {exc}', file=sys.stderr)
+                return 1
+            if not models:
+                print('Nenhum modelo de geração disponível para esta chave.')
+                return 1
+            print('Modelos de geração disponíveis (isso não confirma cota gratuita):')
+            for model in models:
+                print(model)
+            return 0
         if args.test_gemini:
             from gemini import GeminiError, explain
             key = os.getenv('GEMINI_API_KEY', '').strip()

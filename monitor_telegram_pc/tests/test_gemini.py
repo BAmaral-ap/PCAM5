@@ -42,6 +42,26 @@ class GeminiTests(unittest.TestCase):
             with self.assertRaisesRegex(GeminiError, 'limite de geração'):
                 explain('oferta', 'fake', 'gemini-2.5-flash-lite')
 
+class GeminiModelsTests(unittest.TestCase):
+    def test_list_models_handles_pagination_and_filters(self):
+        from gemini import list_models
+        pages = [{'models': [{'name': 'models/gemini-a', 'supportedGenerationMethods': ['generateContent']},
+                             {'name': 'models/embed-a', 'supportedGenerationMethods': ['embedContent']}], 'nextPageToken': 'page2'},
+                 {'models': [{'name': 'models/gemini-b', 'supportedGenerationMethods': ['generateContent']}]}]
+        with patch('urllib.request.urlopen', side_effect=[io.BytesIO(json.dumps(p).encode()) for p in pages]) as calls:
+            self.assertEqual(list_models('secret'), ['gemini-a', 'gemini-b'])
+        self.assertNotIn('secret', calls.call_args.args[0].full_url)
+
+    def test_list_models_redacts_http_error(self):
+        from gemini import list_models
+        error = urllib.error.HTTPError('https://example/secret', 403, 'secret', {}, io.BytesIO(b'secret'))
+        with patch('urllib.request.urlopen', side_effect=error):
+            with self.assertRaises(GeminiError) as caught:
+                list_models('secret')
+        self.assertIn('403', str(caught.exception))
+        self.assertNotIn('secret', str(caught.exception))
+
+
 class DeliveryTests(unittest.IsolatedAsyncioTestCase):
     async def test_gemini_failure_keeps_local_alert_and_caps_calls(self):
         class Bot:

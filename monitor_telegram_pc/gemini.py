@@ -3,11 +3,40 @@ import json
 import re
 import socket
 import urllib.error
+import urllib.parse
 import urllib.request
 
 
 class GeminiError(Exception):
     """Mensagem segura, sem conteúdo das respostas ou credenciais."""
+
+
+def list_models(key):
+    """Listar modelos de geração; disponibilidade não garante cota gratuita."""
+    models, token = [], None
+    for _ in range(20):
+        query = {'pageSize': '100'}
+        if token:
+            query['pageToken'] = token
+        url = 'https://generativelanguage.googleapis.com/v1beta/models?' + urllib.parse.urlencode(query)
+        request = urllib.request.Request(url, headers={'x-goog-api-key': key})
+        try:
+            with urllib.request.urlopen(request, timeout=20) as response:
+                result = json.load(response)
+        except urllib.error.HTTPError as exc:
+            raise GeminiError(f'HTTP {exc.code} ao listar modelos. Confira acesso, chave e conexão com a API.') from None
+        except (urllib.error.URLError, TimeoutError, socket.timeout, OSError):
+            raise GeminiError('Falha de conexão ao listar modelos. Confira sua internet.') from None
+        except (ValueError, UnicodeError):
+            raise GeminiError('Resposta inválida ao listar modelos.') from None
+        for model in result.get('models', []):
+            name = model.get('name', '').removeprefix('models/')
+            if 'generateContent' in model.get('supportedGenerationMethods', []) and re.fullmatch(r'[a-zA-Z0-9._-]{1,100}', name):
+                models.append(name)
+        token = result.get('nextPageToken')
+        if not token:
+            return sorted(set(models))
+    raise GeminiError('Listagem de modelos incompleta; tente novamente.')
 
 
 def explain(payload, key, model):
