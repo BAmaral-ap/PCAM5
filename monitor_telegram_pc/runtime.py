@@ -76,10 +76,14 @@ def notification_key(offer, evaluation):
     clean_link = urlunsplit((link.scheme.lower(), link.netloc.lower(), link.path, urlencode(sorted(query)), ''))
     identity = [offer['peca'], evaluation.get('preco_centavos'), evaluation.get('pagamento'),
                 offer.get('cupom'), (offer.get('loja') or '').casefold(), clean_link, offer.get('condicoes')]
+    if not offer.get('modelo_exato', False):
+        identity.append((offer.get('nome_completo') or '').casefold().strip())
     return hashlib.sha256(json.dumps(identity, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
 
 def make_notifications(store, offer, cfg, purchases, now):
+    if offer.get('categoria') == 'VENTOINHA':
+        return []
     start = timestamp(store.get_meta('alerts_started_at'))
     date = timestamp(offer['data'])
     if date < start or date > now + timedelta(minutes=2) or now - date > timedelta(minutes=cfg.get('idade_maxima_alerta_minutos', 30)):

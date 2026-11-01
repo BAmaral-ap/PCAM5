@@ -30,6 +30,7 @@ RULES = [
     ("PLACA-MAE", "B650 (modelo não identificado)", r"\bb650(?:m|e)?\b", 680, False),
     ("PLACA-MAE", "B850 (modelo não identificado)", r"\bb850(?:m)?\b", 800, False),
     ("PLACA-MAE", "B840 (modelo não identificado)", r"\bb840(?:m)?\b", 650, False),
+    ("PLACA-MAE", "Placa-mãe (modelo não identificado)", r"\b(?:placa[\s-]*m[aã]e|motherboard)\b", 680, False),
     ("FONTE", "XPG Core Reactor II VE 850W", r"\bcore\s*reactor\s*ii\s*ve\b(?=[^\n]*\b850\s*w\b)", 490, True),
     ("FONTE", "XPG Core Reactor II 850W", r"\bcore\s*reactor\s*ii\b(?!\s*ve)(?=[^\n]*\b850\s*w\b)", 490, True),
     ("FONTE", "XPG Core Reactor 850W", r"\bcore\s*reactor\b(?!\s*ii)(?=[^\n]*\b850\s*w\b)", 490, True),
@@ -119,6 +120,8 @@ def _products(text: str, config: dict | None = None) -> list[tuple[str, str, flo
     if not found and generic:
         # e.g. "Gabinete ... sem fonte" describes one case, not a PSU combo.
         found.append(min(generic, key=lambda item: item[0])[1])
+        if found[0][0] == 'PLACA-MAE' and re.search(r'\b(?:intel|lga\s*\d+|b760|b660|h610|z790|z690)\b', text, re.I):
+            return []
     if not found and re.search(r"\bddr5\b", text, re.I) and not re.search(r"placa[\s-]*m[aã]e|motherboard|\blga\b", text, re.I):
         kit = re.search(r"\b([124])\s*[x×]\s*(\d+)\s*gb\b", text, re.I)
         capacity = re.search(r"\b(\d+)\s*gb\b", text, re.I)

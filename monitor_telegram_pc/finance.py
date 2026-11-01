@@ -318,6 +318,9 @@ def evaluate_offer(offer: dict, config: dict, purchases: list[dict]) -> dict:
     if preferred not in {"pix", "cartao"}:
         raise ValueError("Forma de pagamento inválida na montagem.")
     target_raw = config.get("metas", {}).get(model, offer.get("meta"))
+    if not offer.get('modelo_exato', False) and category in {'PLACA-MAE', 'RAM', 'FONTE', 'COOLER-CPU', 'GABINETE'}:
+        reference = build.get(category, {}).get('modelo')
+        target_raw = config.get('metas', {}).get(reference, target_raw)
     target = cents(target_raw) if target_raw is not None else None
     if target == 0:
         target = None
@@ -381,6 +384,21 @@ def evaluate_offer(offer: dict, config: dict, purchases: list[dict]) -> dict:
     if payment != preferred:
         reason.append(f"Avaliado no {payment}; preferência configurada é {preferred}.")
     reason.extend(str(item) for item in verify)
+    # The target is a planning reference, not a guarantee of quality. Generic
+    # candidates remain for manual evaluation and can never be "COMPRAR AGORA".
+    discovery = config.get('alternativas_gerais', {})
+    categories = {'PLACA-MAE', 'RAM', 'FONTE', 'COOLER-CPU', 'GABINETE'}
+    generic_only = all(item == 'Modelo exato não identificado; verificar especificações e compatibilidade' for item in verify)
+    margin = Decimal(str(discovery.get('margem_percentual', 25)))
+    if (discovery.get('ativado', False) and category in categories and not offer.get('modelo_exato', False)
+            and category in build and category not in budget['ja_possui'] and compatible is not False
+            and budget['conclusao_viavel'] is True and price is not None and target is not None
+            and generic_only and margin.is_finite() and 0 <= margin <= 100
+            and Decimal(price) * 100 <= Decimal(target) * (100 + margin)):
+        classification = 'AVALIAR ALTERNATIVA'
+        reason = ['Alternativa dentro da margem de triagem; modelo, qualidade e compatibilidade precisam de verificação.'] + compatibility_notes
+        if payment != preferred:
+            reason.append(f'Avaliado no {payment}; preferência configurada é {preferred}.')
     return {"classificacao": classification, "justificativa": reason,
             "pagamento": payment, "preco_centavos": price, "meta_centavos": target,
             "diferenca_centavos": delta, "diferenca_percentual": percent,

@@ -17,8 +17,13 @@
     "boa_percentual": 0,
     "classes": [
       "COMPRAR AGORA",
-      "BOA PROMOÇÃO"
+      "BOA PROMOÇÃO",
+      "AVALIAR ALTERNATIVA"
     ]
+  },
+  "alternativas_gerais": {
+    "ativado": true,
+    "margem_percentual": 25
   },
   "metas": {
     "Ryzen 7 7800X3D": 1700,

@@ -140,8 +140,9 @@ Inicialmente, `excepcional_percentual: 10` exige 10% ou mais abaixo da meta; `bo
 - **BOA PROMOÇÃO:** preço interessante; confira eventuais pendências de compatibilidade e custos desconhecidos antes de decidir.
 - **NÃO COMPENSA:** preço fora do critério, incompatibilidade, peça já comprada/fora da montagem ou comprometimento do orçamento.
 - **VERIFICAR:** preço, pagamento, meta ou extração ambíguos; não há certeza suficiente para recomendar.
+- **AVALIAR ALTERNATIVA:** anúncio de placa-mãe, RAM, fonte, cooler de CPU ou gabinete sem modelo cadastrado, com preço conhecido e triagem financeira favorável. Confira modelo, qualidade e compatibilidade; a etiqueta não comprova que o produto seja bom.
 
-Somente as duas primeiras classes notificam por padrão. Acrescente `"VERIFICAR"` a `alertas.classes` para receber revisões. Ofertas rejeitadas permanecem no banco.
+As duas primeiras classes e `AVALIAR ALTERNATIVA` notificam por padrão. A triagem ampliada aceita até 25% acima da meta da peça de referência quando a projeção total cabe nos limites; ajuste `alternativas_gerais.margem_percentual` ou desative `alternativas_gerais.ativado` em `config.json`. Preços ou condições ambíguos não entram nessa triagem. Acrescente `"VERIFICAR"` a `alertas.classes` para receber outras revisões. Ventoinhas não fazem parte dessa ampliação. Ofertas rejeitadas permanecem no banco.
 
 ### Compatibilidade e alternativas
 
