@@ -1,384 +1,240 @@
 #!/usr/bin/env python3
-"""Monitor de ofertas de hardware em canais PUBLICOS do Telegram.
-
-Uso: python monitor.py [--watch] [--limit 150] [--days 7]
-Somente LE mensagens. Nao envia mensagens e nao entra em canais.
-"""
+"""Monitor AM5: Telethon, CSV, histórico SQLite e alertas privados opcionais."""
 from __future__ import annotations
 
 import argparse
 import asyncio
-import csv
+from collections import Counter
+from contextlib import contextmanager
+from datetime import datetime, timezone
 import json
 import os
-import re
-import sys
-from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+import sys
 
 from dotenv import load_dotenv
 from telethon import TelegramClient
-from telethon.errors import FloodWaitError
 
-HERE = Path(__file__).resolve().parent
-load_dotenv(HERE / ".env")
-CONFIG_PATH = HERE / "config.json"
-DATA_DIR = HERE / "dados"
-DATA_DIR.mkdir(exist_ok=True)
-CSV_PATH = DATA_DIR / "ofertas.csv"
-STATE_PATH = DATA_DIR / "estado.json"
-
-# Padroes de identificacao: a ordem importa para distinguir RX 9070 e RX 9070 XT.
-RULES = [
-    # Modelos exatos: GRE (12 GB), XT e 9070 comum sao placas diferentes.
-    ("GPU", "RX 9070 XT 16GB", r"\b(?:rx|radeon)\s*9070\s*xt\b", 4700),
-    ("GPU", "RX 9070 GRE 12GB", r"\b(?:rx|radeon)\s*9070\s*gre\b", 3600),
-    ("GPU", "RX 9070 16GB", r"\b(?:rx|radeon)\s*9070\b(?!\s*(?:xt|gre))", 4200),
-    ("GPU", "RX 9060 XT 16GB", r"\b(?:rx|radeon)\s*9060\s*xt\b(?=.*?16\s*gb)", 2800),
-    ("GPU", "RTX 5070", r"\brtx\s*5070\b(?!\s*ti)", 4000),
-    ("CPU", "Ryzen 7 7800X3D", r"\b7800\s*x3d\b", 1700),
-    ("CPU", "Ryzen 7 9800X3D", r"\b9800\s*x3d\b", 2050),
-    ("CPU", "Ryzen 9 7900", r"\bryzen\s*9\s*7900\b(?!\s*x|x3d)", 1600),
-    ("CPU", "Ryzen 5 7600", r"\bryzen\s*5\s*7600\b(?!\s*x)", 1050),
-    ("CPU", "Ryzen 5 9600X", r"\b9600\s*x\b", 1250),
-    ("PLACA-MAE", "ASUS B650M-AYW", r"\bb650m[\s-]*ayw\b", 680),
-    ("PLACA-MAE", "B650 (outra)", r"\bb650(?:m|e)?\b", 680),
-    ("PLACA-MAE", "B850", r"\bb850(?:m)?\b", 800),
-    ("PLACA-MAE", "B840", r"\bb840(?:m)?\b", 650),
-    ("RAM", "DDR5 16GB", r"\bddr5\b", 1500),
-    ("FONTE", "XPG Core Reactor 850W", r"\bcore\s*reactor(?:\s*ii)?(?:\s*ve)?\b(?=.*\b850\s*w\b)", 490),
-    ("FONTE", "XPG Kyber 850W", r"\bkyber\b(?=.*\b850\s*w\b)", 400),
-    ("FONTE", "Fonte 750W/850W", r"\b(?:fonte|psu|power supply)\b(?=.*\b(?:750|850)\s*w\b)", 500),
-    ("GABINETE", "Gabinete", r"\b(?:gabinete|case gamer)\b", 250),
-    ("COOLER-CPU", "Air cooler CPU", r"\b(?:cooler\s+para\s+processador|air[ -]?cooler|cooler\s+de\s+cpu|water[ -]?cooler)\b", 200),
-    ("VENTOINHA", "Kit de fans gabinete", r"\b(?:kit\s+(?:de\s+)?(?:ventoinhas|fans?)|ventoinhas\s+de\s+gabinete|cooler\s+de\s+gabinete)\b", 100),
-]
-MIN_PRICE = {"GPU": 1000, "CPU": 450, "PLACA-MAE": 280, "RAM": 300,
-             "FONTE": 250, "GABINETE": 70, "COOLER-CPU": 35, "VENTOINHA": 15}
-PRICE_RE = re.compile(r"R\$\s*([\d.,]+)", re.I)
-COUPON_RE = re.compile(r"\bcupom\s*(?:de\s*)?(?:desconto\s*)?(?:\:|=|\-|\s)*(?:[\"'`])?([A-Z0-9][A-Z0-9_-]{3,})", re.I)
-IGNORE_LINE_RE = re.compile(r"(menor\s+pre[cç]o|mediana|hist[oó]rico|m[eé]dia\s+(?:dos\s+)?pre[cç]os|pre[cç]o\s+antigo)", re.I)
-FIELDS = ["data", "canal", "peca", "categoria", "preco", "meta", "diferenca_meta", "avaliacao", "cupom", "link", "link_loja", "texto"]
-URL_RE = re.compile(r"https?://[^\s<>]+", re.I)
-INSTALLMENT_RE = re.compile(r"\b\d{1,2}\s*[x×]\s*(?:de\s*)?R\$\s*[\d.,]+", re.I)
+from finance import budget_snapshot, evaluate_offer, validate_purchase
+from notifications import BotNotifier, DeliveryError, format_alert
+# Legacy import names remain available to callers of the original script.
+from parsing import (RULES, brl, brl_number, detect_product, extract_prices,
+                     normalize_channel, parse_offers)
+from runtime import LOG, collect_once, deliver_pending, setup_logging
+from settings import HERE, load_config
+from storage import Store
 
 
-def normalize_channel(value: str) -> str:
-    s = value.strip().rstrip("/")
-    s = re.sub(r"^https?://(?:www\.)?t\.me/(?:s/)?", "", s, flags=re.I)
-    s = s.lstrip("@")
-    if not re.fullmatch(r"[a-zA-Z][a-zA-Z0-9_]{4,31}", s):
-        raise ValueError(f"Canal publico invalido: {value!r}. Use @usuario ou https://t.me/usuario")
-    return s
-
-
-def brl_number(text: str) -> float | None:
-    s = text.strip().rstrip(".,")
-    if not re.fullmatch(r"\d[\d.,]*", s):
-        return None
-    if "," in s:
-        s = s.replace(".", "").replace(",", ".")
-    elif "." in s and len(s.split(".")[-1]) == 3:
-        s = s.replace(".", "")
-    try:
-        return float(s)
-    except ValueError:
-        return None
-
-
-def detect_product(text: str) -> tuple[str, str, float] | None:
-    lower = text.lower()
-    for category, model, pattern, target in RULES:
-        if re.search(pattern, lower, re.I | re.S):
-            if category == "RAM":
-                # Nao confundir DDR5 citado em especificacoes de placa-mae com RAM.
-                if re.search(r"placa[\s-]*m[aã]e|motherboard|\blga\s*1700\b|\bintel\s*b760\b", lower):
-                    return None
-                # Este projeto quer APENAS um modulo de 16 GB DDR5.
-                if not re.search(r"\b16\s*gb\b", lower):
-                    return None
-                if re.search(r"(?:2\s*[x×]\s*16\s*gb|32\s*gb\s*\(\s*2\s*[x×])", lower):
-                    return None
-            if category == "PLACA-MAE" and re.search(r"\b(?:lga\s*1700|intel\s*b760)\b", lower):
-                return None
-            return (category, model, target)
-    return None
-
-
-def extract_prices(text: str, category: str) -> list[float]:
-    found = []
-    for line in text.splitlines():
-        if IGNORE_LINE_RE.search(line):
-            continue
-        # Parcelas (ex.: 3x de R$ 1.575,88) NAO sao precos finais.
-        line = INSTALLMENT_RE.sub("", line)
-        for match in PRICE_RE.finditer(line):
-            v = brl_number(match.group(1))
-            if v is not None and v >= MIN_PRICE[category] and v <= 30000:
-                found.append(v)
-    return found
-
-
-def extract_coupon(text: str) -> str:
-    # Cupons aparecem como "cupom AURAGAMER", "Cupom: `TECH8DO8`"
-    # ou "Cupom no APP `DRAM15OFF`". Nao confundir APP com codigo.
-    pattern = re.compile(
-        r"\bcupom\b(?:\s+(?:de\s+desconto|no\s+app|no\s+site|da\s+loja))?"
-        r"\s*(?::|=|\-)?\s*[`\"']?([A-Za-z0-9][A-Za-z0-9_-]{3,})", re.I
-    )
-    ignore = {"PARA", "COMO", "NESTE", "DESCONTO", "VALIDO", "APLICAR", "RESGATE", "PRODUTO"}
-    for match in pattern.finditer(text):
-        candidate = match.group(1).upper()
-        if candidate not in ignore:
-            return candidate
-    return ""
-
-
-def store_link(text: str) -> str:
-    for m in URL_RE.finditer(text):
-        url = m.group(0).rstrip(".,;)]}>\"'")
-        if "t.me/" not in url.lower() and "telegram.me/" not in url.lower():
-            return url
-    return ""
-
-
-def brl(value: float) -> str:
-    return "R$ " + f"{value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-
-
-def parse_offer(channel: str, msg_id: int, date: datetime, text: str) -> dict[str, Any] | None:
-    product = detect_product(text)
-    if not product:
-        return None
-    category, model, target = product
-    values = extract_prices(text, category)
-    if not values:
-        return None
-    price = min(values)
-    # Metas sao indicadores, NAO garantia de preco final/estoque/desconto.
-    evaluation = "POTENCIAL BOA OFERTA — conferir carrinho" if price <= target else "ACIMA DA META — comparar"
-    seller = store_link(text)
-    # Alguns canais chegam a publicar texto de uma peca com URL de outra.
-    if seller and ((category == "GABINETE" and re.search(r"/(?:kit-ventoinhas|memoria-|placa-de-video)", seller, re.I))
-                   or (category == "GPU" and re.search(r"/(?:kit-ventoinhas|gabinete-gamer|fonte-)", seller, re.I))):
-        evaluation += " | LINK DIVERGENTE"
-    return {
-        "data": date.astimezone().strftime("%Y-%m-%d %H:%M"),
-        "canal": channel,
-        "peca": model,
-        "categoria": category,
-        "preco": round(price, 2),
-        "meta": round(target, 2),
-        "diferenca_meta": round(price-target, 2),
-        "avaliacao": evaluation,
-        "cupom": extract_coupon(text),
-        "link": f"https://t.me/{channel}/{msg_id}",
-        "link_loja": seller,
-        "texto": re.sub(r"\s+", " ", text).strip()[:550],
-    }
-
-
-def parse_offers(channel: str, msg_id: int, date: datetime, text: str) -> list[dict[str, Any]]:
-    """Uma oferta por mensagem normalmente; varios produtos na mesma mensagem
-    sao analisados por linha, sem associar preco de outra peca.
-    """
-    found_models = set()
-    for line in text.splitlines():
-        product = detect_product(line)
-        if product:
-            found_models.add(product[1])
-    # Ex.: uma lista com processadores Ryzen 5 7600 e Ryzen 7 9800X3D.
-    # Nao usar o menor preco de toda a mensagem para todos os produtos.
-    if len(found_models) > 1:
-        result: dict[str, dict[str, Any]] = {}
-        for line in text.splitlines():
-            offer = parse_offer(channel, msg_id, date, line)
-            if offer:
-                model = offer["peca"]
-                offer["cupom"] = extract_coupon(text)
-                offer["link_loja"] = store_link(line) or store_link(text)
-                offer["texto"] = re.sub(r"\s+", " ", text).strip()[:550]
-                # Mesma peca repetida no anuncio: guardar menor preco da mesma peca.
-                if model not in result or offer["preco"] < result[model]["preco"]:
-                    result[model] = offer
-        return list(result.values())
-    item = parse_offer(channel, msg_id, date, text)
-    return [item] if item else []
-
-
-def load_config() -> dict[str, Any]:
-    if not CONFIG_PATH.exists():
-        raise SystemExit("Arquivo config.json nao encontrado.")
-    cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-    channels = cfg.get("canais", [])
-    if not isinstance(channels, list) or not channels:
-        raise SystemExit("Edite config.json e adicione os canais publicos em 'canais'.")
-    cfg["canais"] = list(dict.fromkeys(normalize_channel(s) for s in channels))
-    return cfg
-
-
-def load_state() -> dict[str, int]:
-    if STATE_PATH.exists():
+@contextmanager
+def instance_lock(path):
+    """OS lock released even after crashes; one process per SQLite database."""
+    path = Path(str(path) + '.lock')
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open('a+b') as stream:
+        if stream.tell() == 0:
+            stream.write(b'0')
+            stream.flush()
+        stream.seek(0)
         try:
-            return json.loads(STATE_PATH.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            pass
-    return {}
-
-
-def load_existing() -> dict[str, dict[str, Any]]:
-    rows = {}
-    if CSV_PATH.exists():
-        with CSV_PATH.open("r", encoding="utf-8-sig", newline="") as f:
-            for r in csv.DictReader(f):
-                rows[r["link"] + "|" + r["peca"]] = r
-    return rows
-
-
-def save_csv(rows: dict[str, dict[str, Any]]) -> None:
-    temp = CSV_PATH.with_suffix(".tmp")
-    ordered = sorted(rows.values(), key=lambda r: (r["data"], r["link"]), reverse=True)
-    seen = set()
-    data = []
-    for row in ordered:
-        # Mesmo anuncio republicado no mesmo canal no mesmo dia: manter 1 entrada.
-        signature = (row["canal"].lower(), str(row["data"])[:10],
-                     re.sub(r"\s+", " ", row["texto"]).lower().strip())
-        if signature in seen:
-            continue
-        seen.add(signature)
-        data.append(row)
-    with temp.open("w", newline="", encoding="utf-8-sig") as f:
-        writer = csv.DictWriter(f, fieldnames=FIELDS)
-        writer.writeheader()
-        writer.writerows(data)
-    temp.replace(CSV_PATH)
-
-
-def reclassify_existing() -> None:
-    """Corrige classificacoes do CSV existente, preservando preco ja extraido.
-
-    NAO reextrai preco a partir de texto truncado: isso poderia confundir
-    preco promocional e historico de 90 dias que ficaram na mesma linha.
-    """
-    previous = load_existing()
-    fixed = {}
-    for row in previous.values():
-        prod = detect_product(row["texto"])
-        if not prod:
-            continue
-        cat, name, target = prod
+            if os.name == 'nt':
+                import msvcrt
+                msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            raise ValueError('Já existe um processo usando este banco. Encerre-o antes de iniciar outro comando.') from None
         try:
-            price = float(str(row["preco"]).replace(",", "."))
-        except ValueError:
+            yield
+        finally:
+            stream.seek(0)
+            if os.name == 'nt':
+                msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(stream, fcntl.LOCK_UN)
+
+
+def notifier_from_env():
+    return BotNotifier(os.getenv('TELEGRAM_BOT_TOKEN', '').strip(), os.getenv('TELEGRAM_CHAT_ID', '').strip())
+
+
+def demo(cfg):
+    offer = parse_offers('pcbuildwizard', 1, datetime.now(timezone.utc),
+                         'Ryzen 7 7800X3D\nR$ 1.500,00 no PIX\nLoja: Demonstração\nhttps://example.com/oferta-ficticia', cfg)[0]
+    return '[TESTE — OFERTA FICTÍCIA]\n' + format_alert(offer, evaluate_offer(offer, cfg, []))
+
+
+def migrate_legacy(store):
+    # Preserve source CSVs byte-for-byte. New exports use a different filename.
+    for path in sorted((HERE / 'dados').glob('ofertas*.csv')):
+        if path.name == 'ofertas_monitor.csv':
             continue
-        row = dict(row)
-        row.update(categoria=cat, peca=name, meta=round(target, 2),
-                   diferenca_meta=round(price - target, 2),
-                   avaliacao=("POTENCIAL BOA OFERTA — conferir carrinho" if price <= target
-                              else "ACIMA DA META — comparar"))
-        url = str(row.get("link_loja", ""))
-        if url and cat == "GABINETE" and re.search(r"/(?:kit-ventoinhas|memoria-|placa-de-video)", url, re.I):
-            row["avaliacao"] += " | LINK DIVERGENTE"
-        fixed[row["link"] + "|" + name] = row
-    # Backup anterior preservado para reverter, se necessario.
-    if CSV_PATH.exists():
-        backup = CSV_PATH.with_name("ofertas_backup_antes_v2.csv")
-        if not backup.exists():
-            backup.write_bytes(CSV_PATH.read_bytes())
-    save_csv(fixed)
-    print(f"CSV corrigido: {len(previous)} registros brutos processados -> "
-          f"{len(list(csv.DictReader(CSV_PATH.open(encoding='utf-8-sig'))))} registros revisados.")
-    print("Backup: dados/ofertas_backup_antes_v2.csv")
+        store.import_csv(path)
+    state = HERE / 'dados' / 'estado.json'
+    if state.exists() and not store.get_meta('legacy_state_imported'):
+        old = json.loads(state.read_text(encoding='utf-8'))
+        for channel, cursor in old.items():
+            if isinstance(cursor, int) and cursor >= 0:
+                store.set_cursor(normalize_channel(channel), cursor)
+        store.set_meta('legacy_state_imported', True)
 
 
-async def fetch_once(client: TelegramClient, cfg: dict[str, Any], limit: int, days: int) -> None:
-    state = load_state()
-    rows = load_existing()
-    # Ignora republicacoes identicas no mesmo canal/dia inclusive no terminal.
-    signatures = {(r["canal"].lower(), str(r["data"])[:10],
-                   re.sub(r"\s+", " ", r["texto"]).lower().strip())
-                  for r in rows.values()}
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-    found = []
-    for channel in cfg["canais"]:
-        try:
-            # get_entity resolve username publico; nao solicita entrada no grupo.
-            entity = await client.get_entity(channel)
-            last_id = int(state.get(channel, 0))
-            max_seen = last_id
-            total = 0
-            async for msg in client.iter_messages(entity, limit=limit, min_id=last_id):
-                if msg.date and msg.date < cutoff:
-                    break
-                max_seen = max(max_seen, msg.id)
-                total += 1
-                for offer in parse_offers(channel, msg.id, msg.date, msg.raw_text or ""):
-                    key = offer["link"] + "|" + offer["peca"]
-                    signature = (offer["canal"].lower(), str(offer["data"])[:10],
-                                 re.sub(r"\s+", " ", offer["texto"]).lower().strip())
-                    if key not in rows and signature not in signatures:
-                        rows[key] = offer
-                        found.append(offer)
-                        signatures.add(signature)
-            state[channel] = max_seen
-            print(f"@{channel}: {total} mensagens novas/consultadas")
-            await asyncio.sleep(1.5)
-        except FloodWaitError as err:
-            print(f"Limite de requisicoes do Telegram: aguarde {err.seconds}s antes de executar de novo.")
-            break
-        except Exception as err:
-            # Alguns grupos publicos exigem associacao para ler o historico.
-            # O monitor informa o erro, sem entrar automaticamente.
-            print(f"Nao foi possivel ler @{channel}: {err}")
-            print("Se for grupo publico, talvez voce precise entrar pelo app Telegram antes da consulta.")
-            continue
-    save_csv(rows)
-    STATE_PATH.write_text(json.dumps(state, indent=2), encoding="utf-8")
-    print(f"\n{len(found)} ofertas relevantes novas. CSV: {CSV_PATH}")
-    for row in sorted(found, key=lambda r: (r["diferenca_meta"], r["data"]))[:20]:
-        print(f'[{row["categoria"]}] {row["peca"]} | {brl(row["preco"])} | meta {brl(row["meta"])}')
-        print(f'   {row["avaliacao"]} | cupom: {row["cupom"] or "-"} | {row["link"]}')
-    if len(found) > 20:
-        print(f"... e outras {len(found) - 20}; veja o CSV")
-
-
-async def async_main(args: argparse.Namespace) -> None:
-    cfg = load_config()
-    api_id = os.getenv("TELEGRAM_API_ID", "").strip()
-    api_hash = os.getenv("TELEGRAM_API_HASH", "").strip()
+async def async_main(args, cfg, store):
+    api_id = os.getenv('TELEGRAM_API_ID', '').strip()
+    api_hash = os.getenv('TELEGRAM_API_HASH', '').strip()
     if not api_id.isdigit() or not api_hash:
-        raise SystemExit("Configure TELEGRAM_API_ID e TELEGRAM_API_HASH no arquivo .env (veja README).")
-    # Telegram salva a sessao localmente; nunca compartilhe o arquivo .session.
-    async with TelegramClient(str(HERE / "sessao_telegram"), int(api_id), api_hash) as client:
+        raise ValueError('Configure TELEGRAM_API_ID e TELEGRAM_API_HASH somente no .env local.')
+    notifier = None if args.no_notify or args.login else notifier_from_env()
+    session = Path(os.getenv('TELEGRAM_SESSION', 'sessao_telegram'))
+    if not session.is_absolute():
+        session = HERE / session
+    client = TelegramClient(str(session), int(api_id), api_hash, auto_reconnect=True,
+                            connection_retries=5, request_retries=3, retry_delay=2,
+                            flood_sleep_threshold=0)
+    try:
         while True:
-            await fetch_once(client, cfg, args.limit, args.days)
+            try:
+                await client.connect()
+                break
+            except (ConnectionError, OSError, asyncio.TimeoutError):
+                if not args.watch:
+                    raise
+                LOG.warning('Conexão inicial indisponível; nova tentativa em 30 segundos.')
+                await asyncio.sleep(30)
+        if not await client.is_user_authorized():
+            if args.login:
+                await client.start()
+            else:
+                raise ValueError('Sessão ausente ou expirada. Execute python monitor.py --login no terminal local.')
+        if args.login:
+            print('Sessão autenticada disponível; nenhum canal foi consultado.')
+            return
+        migrated = store.recover_notifications()
+        if migrated:
+            LOG.warning('%s envios interrompidos marcados como incertos; consulte --notifications-status.', migrated)
+        migrate_legacy(store)
+        while True:
+            try:
+                if not client.is_connected():
+                    await client.connect()
+                await collect_once(client, store, cfg, args.limit, args.days, notifier is not None)
+                if notifier:
+                    await deliver_pending(store, notifier, cfg.get('idade_maxima_alerta_minutos', 30))
+                store.export_csv(HERE / 'dados' / 'ofertas_monitor.csv')
+            except (ConnectionError, OSError, asyncio.TimeoutError):
+                LOG.warning('Falha de conexão ou arquivo; estado persistido será reutilizado na próxima consulta.')
             if not args.watch:
                 break
-            print(f"\nProxima consulta em {args.interval} minutos (Ctrl+C para encerrar).")
-            await asyncio.sleep(args.interval * 60)
+            interval = args.interval or cfg.get('intervalo_minutos', 2)
+            LOG.info('Próxima consulta em %s minutos.', interval)
+            await asyncio.sleep(interval * 60)
+    finally:
+        await client.disconnect()
 
 
-def main() -> None:
-    p = argparse.ArgumentParser(description="Consulta canais publicos do Telegram por ofertas de PC AM5")
-    p.add_argument("--limit", type=int, default=150, help="Maximo de mensagens por canal em cada consulta")
-    p.add_argument("--days", type=int, default=7, help="Mensagens dos ultimos N dias")
-    p.add_argument("--reprocess", action="store_true", help="Corrige o CSV antigo sem acessar o Telegram")
-    p.add_argument("--watch", action="store_true", help="Consulta periodicamente enquanto programa estiver aberto")
-    p.add_argument("--interval", type=int, default=30, help="Intervalo em minutos no modo --watch (minimo 10)")
-    args = p.parse_args()
-    if args.limit < 1 or args.limit > 500 or args.days < 1 or args.interval < 10:
-        p.error("Use --limit entre 1 e 500; --days >= 1; --interval >= 10.")
-    if args.reprocess:
-        reclassify_existing()
-        return
+def print_json(value):
+    print(json.dumps(value, ensure_ascii=False, indent=2))
+
+
+def main(argv=None):
+    load_dotenv(HERE / '.env')
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--config', type=Path, default=HERE / 'config.json')
+    parser.add_argument('--db', type=Path, default=HERE / 'dados' / 'monitor.sqlite3')
+    parser.add_argument('--watch', action='store_true')
+    parser.add_argument('--limit', type=int, default=150, help='Tamanho da página de mensagens (1 a 500)')
+    parser.add_argument('--days', type=int, default=7, help='Janela do histórico inicial; sem alertas retroativos')
+    parser.add_argument('--interval', type=float, help='Minutos entre consultas; padrão config: 2')
+    parser.add_argument('--no-notify', action='store_true', help='Coleta sem envio ou fila de alertas')
+    actions = parser.add_mutually_exclusive_group()
+    actions.add_argument('--login', action='store_true', help='Autenticação interativa somente se necessária')
+    actions.add_argument('--dry-run', action='store_true', help='Exibir alerta fictício offline')
+    actions.add_argument('--test-alert', action='store_true', help='Enviar um alerta fictício ao chat privado')
+    actions.add_argument('--bot-chat-id', action='store_true', help='Mostrar IDs privados após /start no bot, sem exibir tokens')
+    actions.add_argument('--budget', action='store_true')
+    actions.add_argument('--history', metavar='MODELO')
+    actions.add_argument('--offers', action='store_true', help='Análise das 20 ofertas recentes, incluindo comparação de perfis')
+    parser.add_argument('--history-days', type=int)
+    actions.add_argument('--import-csv', type=Path)
+    actions.add_argument('--export-csv', type=Path)
+    actions.add_argument('--reprocess', action='store_true')
+    actions.add_argument('--purchase', type=Path, help='JSON com compra já realizada; exige --confirmar')
+    actions.add_argument('--pay-installment', type=int, metavar='ID', help='Registrar parcela já paga; exige --confirmar')
+    actions.add_argument('--notifications-status', action='store_true')
+    parser.add_argument('--confirmar', action='store_true', help='Confirma manualmente registro financeiro local')
+    args = parser.parse_args(argv)
+    if not 1 <= args.limit <= 500 or args.days < 1 or (args.interval is not None and args.interval < 1):
+        parser.error('Use --limit entre 1 e 500; --days >= 1; --interval >= 1.')
+    if args.history_days is not None and args.history_days < 1:
+        parser.error('--history-days deve ser positivo.')
+    if (args.purchase or args.pay_installment is not None) and not args.confirmar:
+        parser.error('Registro financeiro requer confirmação explícita: --confirmar. Nenhuma compra foi registrada.')
     try:
-        asyncio.run(async_main(args))
+        cfg = load_config(args.config)
+        if args.dry_run:
+            print(demo(cfg))
+            return
+        if args.bot_chat_id:
+            token = os.getenv('TELEGRAM_BOT_TOKEN', '')
+            if not token:
+                raise ValueError('Configure TELEGRAM_BOT_TOKEN no .env local.')
+            bot = BotNotifier(token, '1')
+            updates = bot._request('getUpdates', {'timeout': 0, 'allowed_updates': ['message']})
+            ids = {str(u['message']['chat']['id']) for u in updates if u.get('message', {}).get('chat', {}).get('type') == 'private'}
+            print('IDs de chats privados: ' + (', '.join(sorted(ids)) or 'nenhum; envie /start ao bot e repita.'))
+            return
+        if args.test_alert:
+            notifier_from_env().send(demo(cfg))
+            print('Alerta de teste enviado ao chat privado.')
+            return
+        with instance_lock(args.db), Store(args.db) as store:
+            if args.purchase:
+                item = validate_purchase(json.loads(args.purchase.read_text(encoding='utf-8-sig')))
+                if item['categoria'] not in cfg['montagem']:
+                    raise ValueError('Categoria da compra não existe em montagem; confira config.json.')
+                # Repeated execution of the same input must not spend the budget twice.
+                identity = lambda p: {k: v for k, v in p.items() if k not in ('id', 'parcelas_pagas')}
+                if any(identity(p) == identity(item) for p in store.purchases()):
+                    raise ValueError('Compra idêntica já registrada. Confira --budget antes de repetir.')
+                print_json({'compra_registrada': store.add_purchase(item), 'registro': item})
+            elif args.pay_installment is not None:
+                store.record_installment(args.pay_installment)
+                print('Parcela marcada como paga por confirmação manual.')
+            elif args.budget:
+                print_json({'orcamento': budget_snapshot(cfg, store.purchases()), 'compras': store.purchases()})
+            elif args.history:
+                migrate_legacy(store)
+                print_json(store.history(args.history, args.history_days))
+            elif args.offers:
+                recent = sorted(store.offers(), key=lambda o: o['data'], reverse=True)[:20]
+                print_json([{'oferta': o, 'analise': evaluate_offer(o, cfg, store.purchases())} for o in recent])
+            elif args.import_csv:
+                print_json(store.import_csv(args.import_csv))
+            elif args.reprocess:
+                paths = sorted((HERE / 'dados').glob('ofertas*.csv'))
+                print_json({p.name: store.import_csv(p, reprocess=True) for p in paths if p.name != 'ofertas_monitor.csv'})
+            elif args.export_csv:
+                migrate_legacy(store)
+                store.export_csv(args.export_csv)
+                print('CSV exportado; arquivos de origem preservados.')
+            elif args.notifications_status:
+                print_json({'contagens': dict(Counter(n['state'] for n in store.notifications())),
+                            'envios': [{'id': n['id'], 'estado': n['state'], 'data': n['source_date']} for n in store.notifications()]})
+            else:
+                setup_logging(HERE / 'logs')
+                asyncio.run(async_main(args, cfg, store))
     except KeyboardInterrupt:
-        print("\nMonitor encerrado.")
+        print('Monitor encerrado; estado salvo.')
+    except (ValueError, DeliveryError) as exc:
+        # All ValueErrors emitted by our validation contain no credentials.
+        print(str(exc), file=sys.stderr)
+        return 1
+    except Exception as exc:
+        # Telegram/HTTP exception strings can expose request details: type only.
+        print(f'Falha {type(exc).__name__}. Confira configuração e conectividade; credenciais não foram exibidas.', file=sys.stderr)
+        return 1
+    return 0
 
 
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    raise SystemExit(main())

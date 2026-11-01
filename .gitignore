@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.exemplo
+*.session
+*.session-*
+*.session.*
+*.sqlite*
+*.db*
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+monitor_telegram_pc/logs/
+monitor_telegram_pc/dados/*
+!monitor_telegram_pc/dados/.gitkeep
+*.local.json

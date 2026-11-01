@@ -3,5 +3,129 @@
     "https://t.me/pcbuildwizard",
     "https://t.me/LaPromotion"
   ],
-  "observacao": "@pcbuildwizard é grupo público, @LaPromotion é canal público. A conta autenticada precisa conseguir ler o histórico; o script nunca entra em grupos automaticamente."
+  "observacao": "@pcbuildwizard é grupo público, @LaPromotion é canal público. A conta autenticada precisa conseguir ler o histórico; o script nunca entra em grupos automaticamente.",
+  "intervalo_minutos": 2,
+  "idade_maxima_alerta_minutos": 30,
+  "deduplicacao_horas": 24,
+  "orcamento": {
+    "pix": 10000,
+    "cartao": 2500,
+    "total_maximo": 12500
+  },
+  "alertas": {
+    "excepcional_percentual": 10,
+    "boa_percentual": 0,
+    "classes": [
+      "COMPRAR AGORA",
+      "BOA PROMOÇÃO"
+    ]
+  },
+  "metas": {
+    "Ryzen 7 7800X3D": 1700,
+    "Ryzen 7 9800X3D": 2050,
+    "RX 9070 XT 16GB": 4700,
+    "RX 9070 16GB": 4200,
+    "RX 9070 GRE 12GB": 3600,
+    "ASUS B650M-AYW": 680,
+    "DDR5 1x16GB": 1500,
+    "XPG Core Reactor II VE 850W": 490,
+    "Air cooler CPU": 200,
+    "Gabinete": 250
+  },
+  "montagem": {
+    "CPU": {
+      "modelo": "Ryzen 7 7800X3D",
+      "estimativa_pix": 1700,
+      "estimativa_cartao": null,
+      "pagamento": "pix",
+      "possui": false
+    },
+    "GPU": {
+      "modelo": "RX 9070 XT 16GB",
+      "estimativa_pix": 4700,
+      "estimativa_cartao": null,
+      "pagamento": "pix",
+      "possui": false
+    },
+    "PLACA-MAE": {
+      "modelo": "ASUS B650M-AYW",
+      "estimativa_pix": 680,
+      "estimativa_cartao": null,
+      "pagamento": "pix",
+      "possui": false
+    },
+    "RAM": {
+      "modelo": "DDR5 1x16GB",
+      "estimativa_pix": 1500,
+      "estimativa_cartao": 1500,
+      "pagamento": "cartao",
+      "possui": false
+    },
+    "FONTE": {
+      "modelo": "XPG Core Reactor II VE 850W",
+      "estimativa_pix": 490,
+      "estimativa_cartao": null,
+      "pagamento": "pix",
+      "possui": false
+    },
+    "COOLER-CPU": {
+      "modelo": "Air cooler CPU",
+      "estimativa_pix": 200,
+      "estimativa_cartao": null,
+      "pagamento": "pix",
+      "possui": false
+    },
+    "GABINETE": {
+      "modelo": "Gabinete",
+      "estimativa_pix": 250,
+      "estimativa_cartao": null,
+      "pagamento": "pix",
+      "possui": false
+    },
+    "SSD": {
+      "modelo": "SSD já adquirido",
+      "estimativa_pix": 0,
+      "estimativa_cartao": 0,
+      "pagamento": "pix",
+      "possui": true
+    }
+  },
+  "compatibilidade": {
+    "confirmacoes": {}
+  },
+  "perfis": {
+    "Ryzen 7 7800X3D": {
+      "compativel": true,
+      "observacao": "Plataforma prevista; ainda exige confirmação manual de BIOS, dimensões, memória e conectores."
+    },
+    "Ryzen 7 9800X3D": {
+      "compativel": true,
+      "observacao": "Plataforma prevista; ainda exige confirmação manual de BIOS, dimensões, memória e conectores."
+    },
+    "RX 9070 XT 16GB": {
+      "compativel": true,
+      "observacao": "Plataforma prevista; ainda exige confirmação manual de BIOS, dimensões, memória e conectores."
+    },
+    "RX 9070 16GB": {
+      "compativel": true,
+      "observacao": "Plataforma prevista; ainda exige confirmação manual de BIOS, dimensões, memória e conectores."
+    },
+    "RX 9070 GRE 12GB": {
+      "compativel": true,
+      "observacao": "Plataforma prevista; ainda exige confirmação manual de BIOS, dimensões, memória e conectores."
+    },
+    "ASUS B650M-AYW": {
+      "compativel": true,
+      "observacao": "Plataforma prevista; ainda exige confirmação manual de BIOS, dimensões, memória e conectores."
+    },
+    "DDR5 1x16GB": {
+      "compativel": true,
+      "observacao": "Plataforma prevista; ainda exige confirmação manual de BIOS, dimensões, memória e conectores."
+    },
+    "XPG Core Reactor II VE 850W": {
+      "compativel": true,
+      "observacao": "Plataforma prevista; ainda exige confirmação manual de BIOS, dimensões, memória e conectores."
+    }
+  },
+  "observacao_orcamento": "R$ 1.500 no cartão para RAM é estimativa de planejamento configurável, não preço parcelado verificado. Demais preços no cartão desconhecidos. Juros, frete e acessórios devem entrar no total confirmado da compra. Parcelas são compromissos de renda futura, não saldo PIX."
 }
