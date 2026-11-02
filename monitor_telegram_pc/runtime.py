@@ -74,7 +74,7 @@ def notification_key(offer, evaluation):
     tracking = {'tag', 'p', 'affiliated_code', 'aff', 'affiliate', 'ref'}
     query = [(k, v) for k, v in parse_qsl(link.query) if not k.lower().startswith('utm_') and k.lower() not in tracking]
     clean_link = urlunsplit((link.scheme.lower(), link.netloc.lower(), link.path, urlencode(sorted(query)), ''))
-    identity = [offer['peca'], evaluation.get('preco_centavos'), evaluation.get('pagamento'),
+    identity = [offer['peca'], evaluation.get('preco_centavos') or offer.get('anunciado_centavos'), evaluation.get('pagamento'),
                 offer.get('cupom'), (offer.get('loja') or '').casefold(), clean_link, offer.get('condicoes')]
     if not offer.get('modelo_exato', False):
         identity.append((offer.get('nome_completo') or '').casefold().strip())
@@ -90,7 +90,26 @@ def make_notifications(store, offer, cfg, purchases, now):
         return []
     evaluation = evaluate_offer(offer, cfg, purchases)
     offer['avaliacao'] = evaluation['classificacao']
-    if evaluation['classificacao'] not in cfg.get('alertas', {}).get('classes', ['COMPRAR AGORA', 'BOA PROMOÇÃO']):
+    # An advertised total with no payment method is a lead, not a PIX or card
+    # price. Surface promising leads without changing the financial projection.
+    announced = offer.get('anunciado_centavos')
+    target = evaluation.get('meta_centavos')
+    categories = {'CPU', 'GPU', 'PLACA-MAE', 'RAM', 'FONTE', 'COOLER-CPU', 'GABINETE'}
+    broad = {'PLACA-MAE', 'RAM', 'FONTE', 'COOLER-CPU', 'GABINETE'}
+    discovery = cfg.get('alternativas_gerais', {})
+    margin = discovery.get('margem_percentual', 25) if offer.get('categoria') in broad and discovery.get('ativado') else 0
+    uncertain_price = (evaluation['classificacao'] == 'VERIFICAR' and offer.get('categoria') in categories
+        and offer.get('categoria') not in evaluation['orcamento'].get('ja_possui', [])
+        and evaluation.get('compativel') is not False and type(announced) is int and announced > 0
+        and type(target) is int and target > 0 and isinstance(margin, (int, float)) and 0 <= margin <= 100
+        and announced * 100 <= target * (100 + margin)
+        and 'Preço fora da faixa plausível; verificar erro ou produto diferente' not in offer.get('verificar', []))
+    if uncertain_price:
+        evaluation = dict(evaluation, classificacao='VERIFICAR PREÇO', pagamento='não informado',
+                          diferenca_centavos=announced-target,
+                          diferenca_percentual=round((announced-target)*100/target, 2),
+                          justificativa=['Preço anunciado sem forma de pagamento; confirme PIX, cartão, cupom e orçamento antes de decidir.'] + evaluation['justificativa'])
+    if not uncertain_price and evaluation['classificacao'] not in cfg.get('alertas', {}).get('classes', ['COMPRAR AGORA', 'BOA PROMOÇÃO']):
         return []
     fingerprint = notification_key(offer, evaluation)
     key = 'dedupe:' + fingerprint
