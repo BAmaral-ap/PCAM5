@@ -16,7 +16,7 @@ from urllib.parse import urlparse
 # Specific variants precede broader families. Capacity labels for GPUs identify
 # the configured family, not a claim about a vendor's exact board dimensions.
 RULES = [
-    ("GPU", "RX 9070 XT 16GB", r"\b(?:rx|radeon)\s*9070\s*xt\b", 4700, True),
+    ("GPU", "RX 9070 XT 16GB", r"(?<!\w)(?:(?:amd\s+)?(?:radeon\s+)?(?:rx[\s-]*)?|radeon[\s-]*)9070[\s-]*xt\b", 5100, True),
     ("GPU", "RX 9070 GRE 12GB", r"\b(?:rx|radeon)\s*9070\s*gre\b", 3600, True),
     ("GPU", "RX 9070 16GB", r"\b(?:rx|radeon)\s*9070\b(?!\s*(?:xt|gre))", 4200, True),
     ("GPU", "RX 9060 XT 16GB", r"\b(?:rx|radeon)\s*9060\s*xt\b(?=[^\n]*\b16\s*gb\b)", 2800, True),

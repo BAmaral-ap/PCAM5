@@ -112,6 +112,8 @@ Confira `logs/monitor.log`. Desabilite a tarefa para suspender a automação. Se
 
 ## 4. Metas, canais e recomendações
 
+A RX 9070 XT tem triagem preliminar separada: até R$ 4.700 IMPERDÍVEL; até R$ 4.900 EXCELENTE; até R$ 5.100 BOA COMPRA; até R$ 5.300 AVALIAR; acima disso PREÇO ALTO. Configure `rx9070xt_faixas` em `config.json`. O alerta preliminar não depende de pagamento, frete ou análise Gemini e não comprova preço ou estoque. Mensagens com vários preços são sinalizadas para conferência. Alertas preliminares da GPU não aguardam o Gemini.
+
 Edite `config.json` e reinicie o monitor para aplicar mudanças. Os canais iniciais são:
 
 ```json

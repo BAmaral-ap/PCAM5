@@ -1,7 +1,9 @@
 {
   "canais": [
     "https://t.me/pcbuildwizard",
-    "https://t.me/LaPromotion"
+    "https://t.me/LaPromotion",
+    "https://t.me/PoisonPromos",
+    "https://t.me/TecManualOfertas"
   ],
   "observacao": "@pcbuildwizard é grupo público, @LaPromotion é canal público. A conta autenticada precisa conseguir ler o histórico; o script nunca entra em grupos automaticamente.",
   "intervalo_minutos": 2,
@@ -28,7 +30,7 @@
   "metas": {
     "Ryzen 7 7800X3D": 1700,
     "Ryzen 7 9800X3D": 2050,
-    "RX 9070 XT 16GB": 4700,
+    "RX 9070 XT 16GB": 5100,
     "RX 9070 16GB": 4200,
     "RX 9070 GRE 12GB": 3600,
     "ASUS B650M-AYW": 680,
@@ -137,5 +139,11 @@
     "ativado": true,
     "modelo": "gemini-3.5-flash-lite",
     "limite_diario": 20
+  },
+  "rx9070xt_faixas": {
+    "imperdivel": 4700,
+    "excelente": 4900,
+    "boa_compra": 5100,
+    "avaliar": 5300
   }
 }

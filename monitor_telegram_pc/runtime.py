@@ -78,6 +78,11 @@ def notification_key(offer, evaluation):
                 offer.get('cupom'), (offer.get('loja') or '').casefold(), clean_link, offer.get('condicoes')]
     if not offer.get('modelo_exato', False):
         identity.append((offer.get('nome_completo') or '').casefold().strip())
+    if offer.get('peca') == 'RX 9070 XT 16GB':
+        title = offer.get('nome_completo', '')
+        variant = re.search(r'\b(?:asrock|xfx|sapphire|powercolor|gigabyte|asus)\b', title, re.I)
+        if variant:
+            identity.append(variant.group(0).casefold())
     return hashlib.sha256(json.dumps(identity, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
 
@@ -88,6 +93,54 @@ def make_notifications(store, offer, cfg, purchases, now):
     date = timestamp(offer['data'])
     if date < start or date > now + timedelta(minutes=2) or now - date > timedelta(minutes=cfg.get('idade_maxima_alerta_minutos', 30)):
         return []
+    if offer.get('peca') == 'RX 9070 XT 16GB':
+        from rx9070 import price_candidates, tier
+        from notifications import money
+        candidates = price_candidates(offer.get('texto', ''))
+        offer['precos_candidatos_centavos'] = candidates
+        from parsing import detect_product
+        models = {product[1] for line in offer.get('texto', '').splitlines()
+                  if (product := detect_product(line))}
+        if len(candidates) != 1 or len(models) > 1 or any('associação de preço ambígua' in v for v in offer.get('verificar', [])):
+            offer['classificacao_preliminar'] = 'VERIFICAR PREÇO'
+            if candidates:
+                fingerprint = notification_key(offer, {'preco_centavos': min(candidates), 'pagamento': 'ambíguo'})
+                key = 'dedupe:' + fingerprint
+                previous = store.get_meta(key)
+                if previous and now - timestamp(previous) < timedelta(hours=cfg.get('deduplicacao_horas', 24)):
+                    return []
+                values = ', '.join(money(v) for v in candidates)
+                payload = (f"🔥 RX 9070 XT — VERIFICAR PREÇO\nValores anunciados ambíguos: {values}\n"
+                           f"Modelo anunciado: {offer.get('nome_completo') or offer['peca']}\n"
+                           f"Origem: @{offer['canal']}\nConfira preço, pagamento e frete no checkout.\n"
+                           f"{offer.get('link_loja') or offer['link']}\nOrigem: {offer['link']}")
+                return [{'key': fingerprint + ':' + offer['link'], 'payload': payload,
+                         'date': offer['data'], 'fingerprint': key}]
+            return []
+        value = candidates[0]
+        label = tier(value, cfg)
+        offer['classificacao_preliminar'] = label
+        if label == 'PREÇO ALTO':
+            return []
+        meta = round(float(cfg.get('metas', {}).get('RX 9070 XT 16GB', 5100)) * 100)
+        link = offer.get('link_loja') or offer['link']
+        payload = (f"🔥 RX 9070 XT — {label}\n"
+                   f"Modelo anunciado: {offer.get('nome_completo') or offer['peca']}\n"
+                   f"Preço anunciado: {money(value)}\n"
+                   f"Pagamento e frete: confirme no checkout\n"
+                   f"Loja: {offer.get('loja') or 'não informada'}\n"
+                   f"Cupom: {offer.get('cupom') or 'não informado'}\n"
+                   f"Origem: @{offer['canal']}\nMeta: {money(meta)}\n"
+                   f"Diferença da meta: {money(value-meta)}\n"
+                   f"⚠️ Preço preliminar; confirme estoque, cupom e frete antes de comprar.\n"
+                   f"{link}\nOrigem: {offer['link']}")
+        fingerprint = notification_key(offer, {'preco_centavos': value, 'pagamento': 'anunciado'})
+        key = 'dedupe:' + fingerprint
+        previous = store.get_meta(key)
+        if previous and now - timestamp(previous) < timedelta(hours=cfg.get('deduplicacao_horas', 24)):
+            return []
+        return [{'key': fingerprint + ':' + offer['link'], 'payload': payload,
+                 'date': offer['data'], 'fingerprint': key}]
     evaluation = evaluate_offer(offer, cfg, purchases)
     offer['avaliacao'] = evaluation['classificacao']
     # An advertised total with no payment method is a lead, not a PIX or card
@@ -199,7 +252,7 @@ async def deliver_pending(store, notifier, max_age_minutes=30, gemini_config=Non
         limit = settings.get('limite_diario', 20)
         day_key = 'gemini_calls:' + utcnow().date().isoformat()
         used = store.get_meta(day_key, 0)
-        if settings.get('ativado') and key and isinstance(limit, int) and 0 < limit <= 1000 and used < limit:
+        if not payload.startswith('🔥 RX 9070 XT') and settings.get('ativado') and key and isinstance(limit, int) and 0 < limit <= 1000 and used < limit:
             # Count attempts before the request, including failures and restarts.
             store.set_meta(day_key, used + 1)
             try:
