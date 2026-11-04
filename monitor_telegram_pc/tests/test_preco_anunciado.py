@@ -22,6 +22,10 @@ class PrecoAnunciado(unittest.TestCase):
                         self.assertEqual(offer['categoria'], category)
                         self.assertIsNone(offer['pix_centavos']); self.assertIsNone(offer['cartao_centavos'])
                         alerts=make_notifications(store,offer,cfg,[],now)
+                        if category == 'FONTE':
+                            # A preferência atual exige fontes de 850 W.
+                            self.assertEqual(alerts, [])
+                            continue
                         self.assertEqual(len(alerts),1)
                         self.assertIn('VERIFICAR PREÇO',alerts[0]['payload'])
                         self.assertIn('Forma avaliada: não informado',alerts[0]['payload'])

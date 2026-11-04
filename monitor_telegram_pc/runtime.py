@@ -89,6 +89,17 @@ def notification_key(offer, evaluation):
 def make_notifications(store, offer, cfg, purchases, now):
     if offer.get('categoria') == 'VENTOINHA':
         return []
+    # Match the product heading, rather than accessory specifications elsewhere
+    # in a message (e.g. an AM4/AM5 cooler or PSU advice for a GPU).
+    title = offer.get('nome_completo') or ''
+    if offer.get('categoria') == 'PLACA-MAE' and re.search(
+        r'\b(?:am[\s-]*4|(?:a320|a520|b350|b450|b550|x370|x470|x570)(?:m|e|i|s)?)\b', title, re.I
+    ):
+        return []
+    if offer.get('categoria') == 'FONTE':
+        watts = re.findall(r'\b(\d{3,4})\s*w(?:atts?)?\b', title, re.I)
+        if not watts or set(watts) != {'850'}:
+            return []
     start = timestamp(store.get_meta('alerts_started_at'))
     date = timestamp(offer['data'])
     if date < start or date > now + timedelta(minutes=2) or now - date > timedelta(minutes=cfg.get('idade_maxima_alerta_minutos', 30)):
