@@ -7,6 +7,10 @@
   ],
   "observacao": "@pcbuildwizard é grupo público, @LaPromotion é canal público. A conta autenticada precisa conseguir ler o histórico; o script nunca entra em grupos automaticamente.",
   "intervalo_minutos": 2,
+  "monitoramento_lojas": {
+    "ativado": true,
+    "arquivo": "produtos_lojas.json"
+  },
   "idade_maxima_alerta_minutos": 30,
   "deduplicacao_horas": 24,
   "orcamento": {

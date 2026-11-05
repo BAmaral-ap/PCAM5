@@ -2,6 +2,8 @@
 
 O monitor consulta canais públicos com a sessão existente do **Telethon**, extrai ofertas, conserva o histórico em SQLite e envia recomendações ao seu chat privado por um **bot do Telegram**. A coleta e a exportação CSV do projeto foram mantidas e ampliadas. Nenhuma compra, pagamento, entrada em grupo ou registro de compra acontece automaticamente.
 
+Para o monitoramento direto de produtos nas lojas, consulte [LOJAS.md](LOJAS.md).
+
 ## 1. Instalar no Windows
 
 Instale Python **3.11 ou superior**. Abra o PowerShell na pasta `monitor_telegram_pc`:

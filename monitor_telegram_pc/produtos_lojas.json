@@ -1,0 +1,38 @@
+{
+  "versao": 1,
+  "queda_minima_percentual": 5,
+  "lojas": {
+    "kabum": {"termos_verificados": false},
+    "pichau": {"termos_verificados": false},
+    "terabyte": {"termos_verificados": false}
+  },
+  "produtos": [
+    {
+      "id": "kabum-asrock-9070xt-challenger",
+      "nome": "ASRock Radeon RX 9070 XT Challenger 16 GB",
+      "loja": "kabum",
+      "categoria": "GPU",
+      "familia": "RX 9070 XT",
+      "url": "https://www.kabum.com.br/produto/921271/placa-de-video-asrock-radeon-rx-9070-xt-challenger-amd-16gb-90-ga61zz-00uanf",
+      "sku": "90-GA61ZZ-00UANF",
+      "sku_loja": "921271",
+      "termos_identificacao": ["ASRock", "9070", "Challenger"],
+      "meta_centavos": 510000,
+      "intervalo_segundos": 180,
+      "cupons": []
+    },
+    {
+      "id": "pichau-xfx-9070xt-swift-white",
+      "nome": "XFX Radeon RX 9070 XT Swift White Triple Fan 16 GB",
+      "loja": "pichau",
+      "categoria": "GPU",
+      "familia": "RX 9070 XT",
+      "url": "https://www.pichau.com.br/placa-de-video-xfx-radeon-rx-9070-xt-swift-white-triple-fan-gaming-edition-16gb-gddr6-256-bit-rx-97tswf3w9",
+      "sku": "RX-97TSWF3W9",
+      "termos_identificacao": ["XFX", "9070", "Swift", "White"],
+      "meta_centavos": 510000,
+      "intervalo_segundos": 180,
+      "cupons": []
+    }
+  ]
+}

@@ -185,7 +185,7 @@ def make_notifications(store, offer, cfg, purchases, now):
              'date': offer['data'], 'fingerprint': key}]
 
 
-async def collect_once(client, store, cfg, limit=150, days=7, notifications_enabled=True):
+async def collect_once(client, store, cfg, limit=150, days=7, notifications_enabled=True, on_message=None, on_alert=None):
     now = utcnow()
     if store.get_meta('alerts_started_at') is None:
         store.set_meta('alerts_started_at', now.isoformat())
@@ -223,7 +223,17 @@ async def collect_once(client, store, cfg, limit=150, days=7, notifications_enab
                         offer['analise'] = evaluation
                         if notifications_enabled:
                             notifications.extend(make_notifications(store, offer, cfg, purchases, utcnow()))
-                    store.record_message(channel, msg.id, msg.date.isoformat(), text, offers, notifications)
+                    inserted = store.record_message(channel, msg.id, msg.date.isoformat(), text, offers, notifications)
+                    if on_message:
+                        try:
+                            on_message(text)
+                        except Exception as exc:
+                            LOG.warning('Não foi possível priorizar URL de loja: %s.', type(exc).__name__)
+                    if inserted and notifications and on_alert:
+                        try:
+                            on_alert(text, notifications)
+                        except Exception as exc:
+                            LOG.warning('Não foi possível correlacionar alerta de loja: %s.', type(exc).__name__)
                     count += len(offers)
                     batch_size += 1
                 if batch_size < limit:
@@ -263,7 +273,7 @@ async def deliver_pending(store, notifier, max_age_minutes=30, gemini_config=Non
         limit = settings.get('limite_diario', 20)
         day_key = 'gemini_calls:' + utcnow().date().isoformat()
         used = store.get_meta(day_key, 0)
-        if not payload.startswith('🔥 RX 9070 XT') and settings.get('ativado') and key and isinstance(limit, int) and 0 < limit <= 1000 and used < limit:
+        if not payload.startswith(('🔥 RX 9070 XT', '🔥 LOJA —')) and settings.get('ativado') and key and isinstance(limit, int) and 0 < limit <= 1000 and used < limit:
             # Count attempts before the request, including failures and restarts.
             store.set_meta(day_key, used + 1)
             try:

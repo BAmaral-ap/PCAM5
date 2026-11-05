@@ -25,6 +25,22 @@ from settings import HERE, load_config
 from storage import Store
 
 
+def shop_monitor(store, cfg, *, notifications_enabled=True, required=False):
+    from lojas import ShopMonitor, load_catalog
+    settings = cfg.get('monitoramento_lojas', {})
+    if not isinstance(settings, dict):
+        raise ValueError('monitoramento_lojas deve ser um objeto.')
+    if settings.get('ativado', True) is False and not required:
+        return None
+    path = Path(settings.get('arquivo', 'produtos_lojas.json'))
+    if not path.is_absolute():
+        path = HERE / path
+    if not path.exists() and not required:
+        return None
+    catalog, items = load_catalog(path)
+    return ShopMonitor(store, catalog, items, cfg, notifications_enabled=notifications_enabled)
+
+
 @contextmanager
 def instance_lock(path):
     """OS lock released even after crashes; one process per SQLite database."""
@@ -91,7 +107,28 @@ async def async_main(args, cfg, store):
     client = TelegramClient(str(session), int(api_id), api_hash, auto_reconnect=True,
                             connection_retries=5, request_retries=3, retry_delay=2,
                             flood_sleep_threshold=0)
+    shop_task = None
+    delivery_lock = asyncio.Lock()
+
+    async def flush():
+        if notifier:
+            async with delivery_lock:
+                await deliver_pending(store, notifier, cfg.get('idade_maxima_alerta_minutos', 30), cfg.get('gemini'))
+
     try:
+        shops = None
+        if not args.login:
+            migrated = store.recover_notifications()
+            if migrated:
+                LOG.warning('%s envios interrompidos marcados como incertos; consulte --notifications-status.', migrated)
+            migrate_legacy(store)
+            try:
+                shops = shop_monitor(store, cfg, notifications_enabled=notifier is not None)
+            except ValueError as exc:
+                LOG.warning('Monitor de lojas não iniciado: %s', exc)
+            if shops and args.watch:
+                # Store polling can continue even if initial Telegram connection fails.
+                shop_task = asyncio.create_task(shops.run(watch=True, flush=flush))
         while True:
             try:
                 await client.connect()
@@ -109,17 +146,16 @@ async def async_main(args, cfg, store):
         if args.login:
             print('Sessão autenticada disponível; nenhum canal foi consultado.')
             return
-        migrated = store.recover_notifications()
-        if migrated:
-            LOG.warning('%s envios interrompidos marcados como incertos; consulte --notifications-status.', migrated)
-        migrate_legacy(store)
         while True:
             try:
                 if not client.is_connected():
                     await client.connect()
-                await collect_once(client, store, cfg, args.limit, args.days, notifier is not None)
-                if notifier:
-                    await deliver_pending(store, notifier, cfg.get('idade_maxima_alerta_minutos', 30), cfg.get('gemini'))
+                await collect_once(client, store, cfg, args.limit, args.days, notifier is not None,
+                                   on_message=shops.prioritize_message if shops else None,
+                                   on_alert=shops.remember_telegram_alert if shops else None)
+                await flush()
+                if shops and not args.watch:
+                    await shops.run(watch=False, flush=flush)
                 store.export_csv(HERE / 'dados' / 'ofertas_monitor.csv')
             except (ConnectionError, OSError, asyncio.TimeoutError):
                 LOG.warning('Falha de conexão ou arquivo; estado persistido será reutilizado na próxima consulta.')
@@ -129,7 +165,25 @@ async def async_main(args, cfg, store):
             LOG.info('Próxima consulta em %s minutos.', interval)
             await asyncio.sleep(interval * 60)
     finally:
+        if shop_task:
+            shop_task.cancel()
+            try:
+                await shop_task
+            except asyncio.CancelledError:
+                pass
         await client.disconnect()
+
+
+async def shops_only(args, cfg, store):
+    notifier = None if args.no_notify else notifier_from_env()
+    store.recover_notifications()
+    shops = shop_monitor(store, cfg, notifications_enabled=notifier is not None, required=True)
+
+    async def flush():
+        if notifier:
+            await deliver_pending(store, notifier, cfg.get('idade_maxima_alerta_minutos', 30), cfg.get('gemini'))
+
+    await shops.run(watch=args.watch, flush=flush)
 
 
 def print_json(value):
@@ -163,6 +217,9 @@ def main(argv=None):
     actions.add_argument('--purchase', type=Path, help='JSON com compra já realizada; exige --confirmar')
     actions.add_argument('--pay-installment', type=int, metavar='ID', help='Registrar parcela já paga; exige --confirmar')
     actions.add_argument('--notifications-status', action='store_true')
+    actions.add_argument('--lojas', action='store_true', help='Consultar apenas lojas configuradas; --watch mantém em execução')
+    actions.add_argument('--lojas-status', action='store_true', help='Mostrar últimas verificações e preços das lojas')
+    actions.add_argument('--lojas-historico', metavar='ID', help='Mostrar histórico de um produto de loja')
     parser.add_argument('--confirmar', action='store_true', help='Confirma manualmente registro financeiro local')
     args = parser.parse_args(argv)
     if not 1 <= args.limit <= 500 or args.days < 1 or (args.interval is not None and args.interval < 1):
@@ -254,6 +311,18 @@ def main(argv=None):
             elif args.notifications_status:
                 print_json({'contagens': dict(Counter(n['state'] for n in store.notifications())),
                             'envios': [{'id': n['id'], 'estado': n['state'], 'data': n['source_date']} for n in store.notifications()]})
+            elif args.lojas_status or args.lojas_historico:
+                shops = shop_monitor(store, cfg, required=True)
+                if args.lojas_status:
+                    print_json(shops.tracking.status(shops.items))
+                else:
+                    item = next((p for p in shops.items if p['id'] == args.lojas_historico), None)
+                    if item is None:
+                        raise ValueError('ID de produto não encontrado no catálogo de lojas.')
+                    print_json(shops.tracking.history(item))
+            elif args.lojas:
+                setup_logging(HERE / 'logs')
+                asyncio.run(shops_only(args, cfg, store))
             else:
                 setup_logging(HERE / 'logs')
                 asyncio.run(async_main(args, cfg, store))
