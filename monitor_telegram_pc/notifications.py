@@ -79,10 +79,17 @@ def format_alert(offer, evaluation):
     reasons = evaluation.get('justificativa', [])
     if isinstance(reasons, str):
         reasons = [reasons]
+    specs = offer.get('especificacoes') or {}
+    speed = specs.get('frequencia_mhz') if offer.get('categoria') == 'RAM' and isinstance(specs, dict) else None
+    memory_note = []
+    if type(speed) is int:
+        preference = 'faixa preferida' if 5600 <= speed <= 6000 else 'fora da faixa preferida; compare preço e compatibilidade'
+        memory_note = [f'RAM: {speed} MHz ({preference}; referência 5600–6000 MHz)']
     return '\n'.join([
         evaluation['classificacao'],
         offer.get('nome_completo') or offer['peca'],
         f"Modelo identificado: {offer['peca']}",
+        *memory_note,
         f"Preço avaliado: {money(evaluation.get('preco_centavos') or offer.get('anunciado_centavos'))}",
         *([f"Total entregue estimado: {money(evaluation['total_entregue_centavos'])}"] if evaluation.get('total_entregue_centavos') is not None else []),
         f"PIX: {money(offer.get('pix_centavos'))} | Cartão total: {money(offer.get('cartao_centavos'))}",

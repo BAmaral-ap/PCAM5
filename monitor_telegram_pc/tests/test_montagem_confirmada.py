@@ -165,6 +165,10 @@ class ConfirmedBuildTests(unittest.TestCase):
             self.assertIn('420 mm', gpu)
             self.assertIn('850 W', gpu)
             self.assertIn('compatibilidade a confirmar', gpu)
+            memory = alerts('Memória DDR5 16GB 6000 MHz R$ 1200 no cartão')[0]['payload']
+            self.assertIn('6000 MHz (faixa preferida', memory)
+            memory = alerts('Memória DDR5 16GB 5200 MHz R$ 1100 no cartão')[0]['payload']
+            self.assertIn('fora da faixa preferida', memory)
             reactivate(store, 'FONTE')
             self.assertTrue(alerts('Fonte Gamer 850W\nPreço: R$ 450'))
             self.assertEqual(store.notifications(), [])

@@ -254,6 +254,10 @@ def extract_prices(text: str, category: str) -> list[float]:
 
 def _explicit_specs(text: str, category: str) -> dict[str, Any]:
     """Use only explicit, unambiguous product specifications from its block."""
+    if category == 'RAM':
+        speeds = {int(value) for value in re.findall(r'\b(\d{4,5})\s*(?:MHz|MT/s)\b', text, re.I)}
+        speeds = {value for value in speeds if 4000 <= value <= 10000}
+        return {'frequencia_mhz': speeds.pop()} if len(speeds) == 1 else {}
     if category != 'GPU':
         return {}
     result = {}

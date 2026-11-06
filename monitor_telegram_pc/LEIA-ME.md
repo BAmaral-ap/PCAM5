@@ -213,7 +213,7 @@ Pare o monitor e, no computador com o banco existente, execute:
 
 O comando registra cooler ARCTIC Freezer 36 (R$ 215,81), Montech XR White (R$ 317,12) e Pichau Cluster 850W (R$ 395,05). Ele reconhece o cooler antigo, não duplica os registros e interrompe sem mudar as compras se encontrar conflito de valor ou pagamento. A fonte fica paga e comprada, com entrega em preparação. O gabinete é registrado como `avista` porque a forma específica não foi informada. O comando preserva os canais e demais configurações existentes; uma repetição não desfaz alterações posteriores.
 
-Fonte, gabinete e coolers deixam de gerar alertas de compra, enquanto GPU, CPU, placa-mãe e RAM continuam. Para reativar uma categoria sem apagar o histórico nem presumir estorno, pare o monitor e use, por exemplo:
+Fonte, gabinete e coolers deixam de gerar alertas de compra, enquanto GPU, CPU, placa-mãe e RAM continuam. Quando a frequência da RAM é identificada, o alerta destaca a faixa preferida de 5600–6000 MHz; uma opção de outra frequência não é descartada automaticamente nem se exige CL30. Para reativar uma categoria sem apagar o histórico nem presumir estorno, pare o monitor e use, por exemplo:
 
 ```powershell
 .\.venv\Scripts\python.exe monitor.py --reativar-categoria FONTE --confirmar
