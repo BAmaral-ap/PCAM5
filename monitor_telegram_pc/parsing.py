@@ -39,12 +39,13 @@ RULES = [
     ("COOLER-CPU", "Cooler CPU (modelo não identificado)", r"\b(?:cooler\s+para\s+processador|air[ -]?cooler|cooler\s+de\s+cpu|water[ -]?cooler)\b", 200, False),
     ("VENTOINHA", "Kit de fans gabinete (modelo não identificado)", r"\b(?:kit\s+(?:de\s+)?(?:ventoinhas|fans?)|ventoinhas\s+de\s+gabinete|cooler\s+de\s+gabinete)\b", 100, False),
     ("GABINETE", "Gabinete (modelo não identificado)", r"\b(?:gabinete|case gamer)\b", 250, False),
+    ("SSD", "SSD NVMe", r"(?=[^\n]*\b(?:ssd|m[.\s-]*2)\b)(?=[^\n]*\b(?:nvme|nvm[\s-]*express)\b)\b(?:ssd|m[.\s-]*2|nvme)\b", None, False),
 ]
 MIN_PRICE = {"GPU": 1000, "CPU": 450, "PLACA-MAE": 280, "RAM": 100,
-             "FONTE": 150, "GABINETE": 70, "COOLER-CPU": 35, "VENTOINHA": 15}
+             "FONTE": 150, "GABINETE": 70, "COOLER-CPU": 35, "VENTOINHA": 15, "SSD": 50}
 MONEY = r"R\$\s*(\d[\d.,]*)"
 PRICE_RE = re.compile(MONEY, re.I)
-INSTALLMENT_RE = re.compile(r"\b(\d{1,2})\s*(?:[x×]|parcelas?)\s*(?:de\s*)?" + MONEY, re.I)
+INSTALLMENT_RE = re.compile(r"\b(\d{1,2})\s*(?:[x×]|parcelas?)\s*(?:(?:no\s+)?cart[aã]o\s*)?(?:de\s*)?" + MONEY, re.I)
 URL_RE = re.compile(r"https?://[^\s<>]+", re.I)
 HISTORY_RE = re.compile(r"menor\s+pre[cç]o|mediana|hist[oó]rico|m[eé]dia\s+(?:dos\s+)?pre[cç]os|pre[cç]o\s+antigo", re.I)
 
@@ -110,7 +111,7 @@ def _products(text: str, config: dict | None = None) -> list[tuple[str, str, flo
             targets = (config or {}).get("metas", {})
             target = targets.get(model, targets.get(aliases.get(model, ""), target))
             if not exact:
-                generic.append((match.start(), (category, model, float(target), exact)))
+                generic.append((match.start(), (category, model, float(target) if target is not None else None, exact)))
                 continue
             if category in {"VENTOINHA", "GABINETE"} and any(p[0] == "GPU" for p in found):
                 continue
@@ -122,6 +123,15 @@ def _products(text: str, config: dict | None = None) -> list[tuple[str, str, flo
         found.append(min(generic, key=lambda item: item[0])[1])
         if found[0][0] == 'PLACA-MAE' and re.search(r'\b(?:intel|lga\s*\d+|b760|b660|h610|z790|z690)\b', text, re.I):
             return []
+        if found[0][0] == 'SSD':
+            if re.search(r'\b(?:case\s+(?:para|de)|adaptador|dissipador|enclosure)\b', text, re.I):
+                return []
+            capacity = re.findall(r'\b(\d+)\s*(TB|GB)\b', text, re.I)
+            labels = {f'{number}{unit.upper()}' for number, unit in capacity}
+            label = next(iter(labels)) if len(labels) == 1 else ''
+            model = 'SSD NVMe' + (f' {label}' if label else '')
+            target = (config or {}).get('metas', {}).get(model, (config or {}).get('metas', {}).get('SSD NVMe'))
+            found = [('SSD', model, float(target) if target is not None else None, False)]
     if not found and re.search(r"\bddr5\b", text, re.I) and not re.search(r"placa[\s-]*m[aã]e|motherboard|\blga\b", text, re.I):
         kit = re.search(r"\b([124])\s*[x×]\s*(\d+)\s*gb\b", text, re.I)
         capacity = re.search(r"\b(\d+)\s*gb\b", text, re.I)
@@ -154,6 +164,46 @@ def store_link(text: str) -> str:
         if (urlparse(url).hostname or "").lower() not in {"t.me", "telegram.me", "www.t.me"}:
             return url
     return ""
+
+
+def _installment_terms(text: str) -> tuple[bool | None, int | None, int | None]:
+    """Associate interest and card evidence with an explicitly stated plan."""
+    statuses: list[bool] = []
+    counts: set[int] = set()
+    totals: set[int] = set()
+    for line in URL_RE.sub('', text).splitlines():
+        line = HISTORY_RE.split(line, maxsplit=1)[0]
+        plans = re.findall(r'(?<!\w)(\d{1,2})\s*(?:x|×|parcelas?)(?!\w)', line, re.I)
+        plans = [int(value) for value in plans if int(value) >= 2]
+        if not plans:
+            continue
+        counts.update(plans)
+        free = bool(re.search(r'\b(?:sem\s+juros|s\s*/\s*juros|zero\s+juros|0\s*%\s*(?:de\s*)?juros)\b', line, re.I))
+        charged = bool(re.search(r'\b(?:com\s+juros|c\s*/\s*juros|juros\s+de\s+\d)', line, re.I))
+        card = bool(re.search(r'\b(?:cart[aã]o|cr[eé]dito)\b', line, re.I))
+        other_plan = bool(re.search(r'(?:\d+\s*(?:x|×|parcelas?).{0,30}\b(?:no|via)\s+(?:pix|boleto|carn[eê])\b|'
+                                    r'(?:sem\s+juros|s\s*/\s*juros)\s+(?:no|via)\s+(?:pix|boleto|carn[eê])\b)', line, re.I))
+        card_unavailable = bool(re.search(r'\bcart[aã]o\s+(?:n[aã]o|indispon[ií]vel)', line, re.I))
+        if free and card and not other_plan and not card_unavailable:
+            statuses.append(True)
+            if len(plans) == 1 and not charged:
+                for match in INSTALLMENT_RE.finditer(line):
+                    unit = cents(match[2])
+                    if unit is not None and int(match[1]) == plans[0]:
+                        totals.add(unit * plans[0])
+                total_pattern = (r'R\$\s*(\d[\d.,]*)\s*(?:no\s+cart[aã]o\s*)?'
+                                 r'em\s+(\d{1,2})\s*(?:x|×|parcelas?)(?!\w)')
+                for amount, count in re.findall(total_pattern, line, re.I):
+                    value = cents(amount)
+                    if value is not None and int(count) == plans[0]:
+                        totals.add(value)
+        if charged:
+            statuses.append(False)
+    distinct = set(statuses)
+    status = next(iter(distinct)) if len(distinct) == 1 else None
+    count = next(iter(counts)) if len(counts) == 1 else None
+    total = next(iter(totals)) if status is True and count is not None and len(totals) == 1 else None
+    return status, count, total
 
 
 def _prices(text: str) -> dict[str, Any]:
@@ -203,6 +253,8 @@ def _prices(text: str) -> dict[str, Any]:
                 continue
             before = line[matches[index - 1].end() if index else 0:match.start()]
             after = line[match.end():matches[index + 1].start() if index + 1 < len(matches) else len(line)]
+            if re.search(r'\bfrete\s+para\s+[^:]{1,50}:\s*$', before, re.I):
+                continue
             if re.search(r"(?:\bde|antes|era|pre[cç]o\s+(?:original|normal)|frete|cashback|desconto(?:\s+de)?)\s*[:\-]?\s*$", before, re.I):
                 continue
             # An installment amount without an explicit count is never a total.
@@ -212,7 +264,7 @@ def _prices(text: str) -> dict[str, Any]:
             # Prefer adjacent payment labels; do not let an earlier amount's
             # suffix label bleed into the next amount's payment method.
             suffix = re.match(r"\s*(?:(?:[àa]\s+vista\s+)?(?:no|via|por|em)\s+)?(pix|cart[aã]o|parcelad[oa])\b", after, re.I)
-            installments_suffix = re.match(r"\s*em\s+(\d{1,2})\s*parcelas?\s+(?:no\s+)?cart[aã]o", after, re.I)
+            installments_suffix = re.match(r"\s*em\s+(\d{1,2})\s*(?:x|×|parcelas?)(?:\s*(?:sem|s\s*/|com|c\s*/)\s*juros)?\s+(?:no\s+)?cart[aã]o", after, re.I)
             prefix = re.search(r"\b(pix|cart[aã]o|parcelad[oa])\s*[:\-]?\s*$", before, re.I)
             # "R$ X no PIX R$ Y à vista no cartão": PIX belongs to X.
             if index and re.fullmatch(r"\s*(?:no|via|por|em)?\s*(?:pix|cart[aã]o|parcelad[oa])\s*", before, re.I):
@@ -223,7 +275,12 @@ def _prices(text: str) -> dict[str, Any]:
                 bucket = "cartao"
                 counts.append(int(installments_suffix[1]))
             values[bucket].append(amount)
-    result: dict[str, Any] = {"parcelas": counts[0] if counts and len(set(counts)) == 1 else None}
+    interest_free, described_count, interest_total = _installment_terms(clean)
+    if described_count is not None:
+        counts.append(described_count)
+    result: dict[str, Any] = {"parcelas": counts[0] if counts and len(set(counts)) == 1 else None,
+                              "parcelamento_sem_juros": interest_free,
+                              "total_parcelado_sem_juros_centavos": interest_total}
     for bucket, amounts in values.items():
         distinct = set(amounts)
         if len(distinct) > 1:
@@ -255,9 +312,12 @@ def extract_prices(text: str, category: str) -> list[float]:
 def _explicit_specs(text: str, category: str) -> dict[str, Any]:
     """Use only explicit, unambiguous product specifications from its block."""
     if category == 'RAM':
-        speeds = {int(value) for value in re.findall(r'\b(\d{4,5})\s*(?:MHz|MT/s)\b', text, re.I)}
-        speeds = {value for value in speeds if 4000 <= value <= 10000}
-        return {'frequencia_mhz': speeds.pop()} if len(speeds) == 1 else {}
+        speeds = {(int(value), unit.upper()) for value, unit in re.findall(r'\b(\d{4,5})\s*(MHz|MT/s)\b', text, re.I)}
+        speeds = {(value, unit) for value, unit in speeds if 4000 <= value <= 10000}
+        if len(speeds) == 1:
+            value, unit = speeds.pop()
+            return {'velocidade_memoria': value, 'frequencia_unidade': 'MT/s' if unit == 'MT/S' else 'MHz'}
+        return {}
     if category != 'GPU':
         return {}
     result = {}
@@ -316,7 +376,7 @@ def _offer(channel: str, msg_id: int, date: datetime, text: str, product: tuple,
         "data": date.astimezone(timezone.utc).isoformat(), "canal": channel,
         "message_id": msg_id, "peca": model, "categoria": category,
         "nome_completo": title, "preco": price, "meta": target,
-        "diferenca_meta": round(price - target, 2) if price is not None else None,
+        "diferenca_meta": round(price - target, 2) if price is not None and target is not None else None,
         "avaliacao": "VERIFICAR" if verify else "OFERTA OBSERVADA",
         "cupom": extract_coupon(text), "link": f"https://t.me/{channel}/{msg_id}",
         "link_loja": seller, "texto": original, "loja": store_name,

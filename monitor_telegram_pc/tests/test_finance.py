@@ -9,10 +9,12 @@ from finance import (
 
 def config():
     build = copy.deepcopy(DEFAULT_BUILD)
+    # Demais cálculos deste conjunto usam a situação histórica com SSD existente.
+    build['SSD'] = {'modelo': 'SSD existente', 'possui': True}
     # Independent planning assumption supplied by the user, not copied from
     # an advertised PIX price by the implementation.
     build["RAM"]["estimativa_cartao"] = 1800
-    return {"orcamento": {"pix": 10000, "cartao": 2500}, "montagem": build,
+    return {"orcamento": {"pix": 10000, "cartao": 2500, "total_maximo": 12500}, "montagem": build,
             "metas": {"Ryzen 7 7800X3D": 1700, "DDR5 16GB": 1500},
             "perfis": {"Ryzen 7 7800X3D": {"socket": "AM5", "compativel": True}},
             "compatibilidade": {"confirmacoes": {"Ryzen 7 7800X3D": True}}}
@@ -137,17 +139,21 @@ class FinanceTests(unittest.TestCase):
 
     def test_ram_prefers_card_at_actual_card_total(self):
         item = offer(peca="DDR5 16GB", categoria="RAM", pix_centavos=140000,
-                     cartao_centavos=149000, meta=1500)
+                     cartao_centavos=149000, meta=1500, parcelas=10,
+                     parcelamento_sem_juros=True, total_parcelado_sem_juros_centavos=149000)
         result = evaluate_offer(item, config(), [])
         self.assertEqual(result["pagamento"], "cartao")
         self.assertEqual(result["preco_centavos"], 149000)
 
-    def test_exceptional_ram_pix_if_complete_build_fits(self):
+    def test_exceptional_ram_pix_does_not_override_card_policy(self):
         item = offer(peca="DDR5 16GB", categoria="RAM", pix_centavos=100000,
-                     cartao_centavos=149000, meta=1500)
+                     cartao_centavos=149000, meta=1500, parcelas=10,
+                     parcelamento_sem_juros=True, total_parcelado_sem_juros_centavos=149000)
         result = evaluate_offer(item, config(), [])
-        self.assertEqual(result["pagamento"], "pix")
-        self.assertEqual(result["orcamento"]["total_projetado_centavos"], 902000)
+        self.assertEqual(result["pagamento"], "cartao")
+        self.assertEqual(result["preco_centavos"], 149000)
+        self.assertEqual(result["orcamento"]["total_projetado_centavos"], 951000)
+        self.assertNotEqual(result['classificacao'], 'NÃO RECOMENDAR')
 
     def test_bought_category_is_not_recommended(self):
         result = evaluate_offer(offer(peca="DDR5 16GB", categoria="RAM", meta=1500,

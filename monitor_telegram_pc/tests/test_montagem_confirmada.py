@@ -82,10 +82,12 @@ class ConfirmedBuildTests(unittest.TestCase):
         self.assertEqual(report['gasto_avista_sem_meio_centavos'], 31712)
         self.assertEqual(report['entradas_pendentes'][0]['valor_centavos'], 500000)
         self.assertEqual(report['entradas_pendentes'][0]['status'], 'pendente')
-        self.assertEqual({p['categoria'] for p in report['faltantes']}, {'GPU', 'CPU', 'PLACA-MAE', 'RAM'})
+        self.assertEqual({p['categoria'] for p in report['faltantes']}, {'GPU', 'CPU', 'PLACA-MAE', 'RAM', 'SSD'})
         self.assertEqual(next(p for p in report['faltantes'] if p['categoria'] == 'RAM')['pagamento'], 'cartao')
-        self.assertEqual(report['total_projetado_centavos'], 995798)
-        self.assertEqual(report['folga_teto_centavos'], -50798)
+        self.assertEqual(report['total_projetado_centavos'], 1065798)
+        self.assertEqual(report['projecao_total_avista_centavos'], 915798)
+        self.assertEqual(report['projecao_total_cartao_centavos'], 150000)
+        self.assertEqual(report['folga_teto_centavos'], -120798)
 
     def test_conflicting_purchase_aborts_atomically(self):
         with Store(self.db) as store:

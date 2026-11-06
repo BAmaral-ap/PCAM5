@@ -80,11 +80,26 @@ def format_alert(offer, evaluation):
     if isinstance(reasons, str):
         reasons = [reasons]
     specs = offer.get('especificacoes') or {}
-    speed = specs.get('frequencia_mhz') if offer.get('categoria') == 'RAM' and isinstance(specs, dict) else None
+    speed = specs.get('velocidade_memoria', specs.get('frequencia_mhz')) if offer.get('categoria') == 'RAM' and isinstance(specs, dict) else None
     memory_note = []
     if type(speed) is int:
         preference = 'faixa preferida' if 5600 <= speed <= 6000 else 'fora da faixa preferida; compare preço e compatibilidade'
-        memory_note = [f'RAM: {speed} MHz ({preference}; referência 5600–6000 MHz)']
+        unit = specs.get('frequencia_unidade') if specs.get('frequencia_unidade') in {'MHz', 'MT/s'} else 'MHz'
+        memory_note = [f'RAM: {speed} {unit} ({preference}; referência 5600–6000 MT/s)']
+    if offer.get('categoria') == 'RAM':
+        if offer.get('parcelamento_sem_juros') is True:
+            memory_note.append('Parcelamento sem juros anunciado no cartão; confirme preço e condições no checkout.')
+        else:
+            memory_note.append('⚠️ Parcelamento sem juros ainda não confirmado.')
+        pix, card = offer.get('pix_centavos'), offer.get('total_parcelado_sem_juros_centavos')
+        if type(card) is int:
+            memory_note.append(f'Total parcelado sem juros anunciado: {money(card)}')
+        if type(pix) is int and type(card) is int:
+            memory_note.append(f'Diferença do total no cartão em relação ao PIX: {money(card - pix)}')
+        memory_note.append('RAM desejada: 1×16 GB; confirme o módulo e a compatibilidade antes da compra.')
+        memory_note.append('Confira fabricante, garantia e possibilidade de adicionar outro módulo compatível depois.')
+    if offer.get('categoria') == 'SSD':
+        memory_note.append('Capacidade desejada: 1 TB ou 500 GB; confirme modelo e garantia.')
     return '\n'.join([
         evaluation['classificacao'],
         offer.get('nome_completo') or offer['peca'],
@@ -105,5 +120,7 @@ def format_alert(offer, evaluation):
         'Condições: ' + '; '.join(offer.get('condicoes', []) + offer.get('verificar', [])),
         offer.get('link_loja') or offer['link'],
         'Origem: ' + offer['link'],
-        'Recomendação automática. Confira preço final, frete, compatibilidade e estoque. Compra somente por sua decisão.',
+        ('Alerta para avaliação. Confira preço final, parcelamento, frete, compatibilidade e estoque. Compra somente por sua decisão.'
+         if offer.get('categoria') == 'RAM' else
+         'Recomendação automática. Confira preço final, frete, compatibilidade e estoque. Compra somente por sua decisão.'),
     ])[:4096]

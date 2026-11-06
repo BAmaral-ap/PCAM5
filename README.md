@@ -31,7 +31,7 @@ O intervalo padrão é de 2 minutos. O notebook precisa estar ligado, conectado 
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-Metas, canais e estimativas ficam em `config.json`. A atualização de novembro registra três compras (R$ 927,98), orçamento previsto de R$ 9.450,00 e saldo previsto de R$ 8.522,02, condicionado às entradas futuras. O crédito da RAM não é receita e o dinheiro disponível não foi informado. No computador que contém o banco existente, pare o monitor e execute:
+Metas, canais e estimativas ficam em `config.json`. A atualização registra três compras (R$ 927,98), mantém o SSD NVMe como pendente e trata a RAM como compra no cartão parcelada sem juros, paga com renda pessoal separada. A referência global anterior de R$ 9.450 e seu saldo previsto de R$ 8.522,02 não representam dinheiro disponível à vista. No computador que contém o banco existente, pare o monitor e execute:
 
 ```powershell
 .\.venv\Scripts\python.exe monitor.py --atualizar-montagem --confirmar

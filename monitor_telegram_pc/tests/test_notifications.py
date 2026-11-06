@@ -60,7 +60,7 @@ class NotificationTests(unittest.TestCase):
         text = demo(load_config())
         self.assertIn('OFERTA FICTÍCIA', text)
         self.assertIn('R$ 1.500,00', text)
-        self.assertIn('R$ 9.720,00', text)
+        self.assertIn('R$ 10.420,00', text)
         self.assertIn('Cartão total: não informado', text)
         self.assertNotIn('histórico', text.lower())
         self.assertLessEqual(len(text), 4096)

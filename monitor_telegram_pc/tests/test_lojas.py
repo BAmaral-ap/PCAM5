@@ -352,6 +352,26 @@ class SchedulerTests(unittest.IsolatedAsyncioTestCase):
                                  'pagamento':'pix','parcelas':1,'parcelas_pagas':0,'monitorar_novamente':True})
         monitor=self.make(fetch);await monitor.check_due()
         self.assertEqual(len(self.store.pending_notifications()),1)
+    async def test_ssd_store_alert_respects_global_cap_and_keeps_history(self):
+        ssd = deepcopy(ITEM)
+        ssd.update(id='test-ssd', nome='SSD NVMe 1TB', categoria='SSD', familia='SSD NVMe',
+                   termos_identificacao=['SSD', 'NVMe', '1TB'], meta_centavos=100000)
+        price = ['850']
+        def fetch(url):
+            if url.endswith('/robots.txt'):
+                return Response(200, ROBOTS, 'text/plain')
+            return Response(200, html(price[0], product_name=ssd['nome']), 'text/html')
+        catalog = {'lojas': {'kabum': {'termos_verificados': True}}, 'produtos': [ssd]}
+        monitor = ShopMonitor(self.store, catalog, [ssd], {'metas': {'SSD NVMe': 700}},
+                              fetch=fetch, now=self.clock.now, sleep=self.clock.sleep, jitter=lambda:0)
+        await monitor.check_due()
+        self.assertEqual(self.store.pending_notifications(), [])
+        self.assertEqual(len(monitor.tracking.history(ssd)), 1)
+        price[0] = '650'
+        self.clock.t += 180
+        await monitor.check_due()
+        self.assertEqual(len(self.store.pending_notifications()), 1)
+        self.assertIn('Meta: R$ 700,00', self.store.pending_notifications()[0]['payload'])
     async def test_shop_alert_does_not_wait_for_gemini(self):
         from runtime import deliver_pending
         class Bot:

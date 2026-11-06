@@ -299,7 +299,7 @@ def main(argv=None):
                             stream.flush()
                             os.fsync(stream.fileno())
                         load_config(temporary)
-                        apply_confirmed(store)
+                        apply_confirmed(store, updated)
                         try:
                             os.replace(temporary, args.config)
                         except OSError:

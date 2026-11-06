@@ -76,6 +76,11 @@ def notification_key(offer, evaluation):
     clean_link = urlunsplit((link.scheme.lower(), link.netloc.lower(), link.path, urlencode(sorted(query)), ''))
     identity = [offer['peca'], evaluation.get('preco_centavos') or offer.get('anunciado_centavos'), evaluation.get('pagamento'),
                 offer.get('cupom'), (offer.get('loja') or '').casefold(), clean_link, offer.get('condicoes')]
+    if offer.get('categoria') == 'RAM':
+        identity.extend([offer.get('pix_centavos'), offer.get('cartao_centavos'), offer.get('parcelas'),
+                         offer.get('parcelamento_sem_juros'), offer.get('total_parcelado_sem_juros_centavos')])
+    if offer.get('categoria') == 'SSD':
+        identity.extend([offer.get('pix_centavos'), offer.get('cartao_centavos'), offer.get('frete_centavos')])
     if not offer.get('modelo_exato', False):
         identity.append((offer.get('nome_completo') or '').casefold().strip())
     if offer.get('peca') == 'RX 9070 XT 16GB':
@@ -110,6 +115,59 @@ def make_notifications(store, offer, cfg, purchases, now):
     date = timestamp(offer['data'])
     if date < start or date > now + timedelta(minutes=2) or now - date > timedelta(minutes=cfg.get('idade_maxima_alerta_minutos', 30)):
         return []
+    if category == 'RAM':
+        evaluation = evaluate_offer(offer, cfg, purchases)
+        offer['avaliacao'] = evaluation['classificacao']
+        if ((cfg.get('montagem') and category not in cfg['montagem'])
+                or category in evaluation['orcamento'].get('ja_possui', []) or evaluation.get('compativel') is False
+                or offer.get('parcelamento_sem_juros') is False
+                or re.search(r'\b(?:so[ -]?dimm|notebook)\b', title, re.I)):
+            return []
+        shape = re.fullmatch(r'DDR5\s+(\d+)x(\d+)GB', offer.get('peca', ''), re.I)
+        if shape and (int(shape[1]), int(shape[2])) != (1, 16):
+            return []
+        price = (offer.get('total_parcelado_sem_juros_centavos') or offer.get('cartao_centavos')
+                 or offer.get('anunciado_centavos') or offer.get('pix_centavos'))
+        if type(price) is not int or price <= 0 or 'Preço fora da faixa plausível; verificar erro ou produto diferente' in offer.get('verificar', []):
+            return []
+        if evaluation['classificacao'] == 'NÃO COMPENSA':
+            evaluation = dict(evaluation, classificacao='AVALIAR PREÇO E ORÇAMENTO',
+                              justificativa=['Confira o preço total parcelado, o orçamento e a compatibilidade.'] + evaluation['justificativa'])
+        fingerprint = notification_key(offer, evaluation)
+        key = 'dedupe:' + fingerprint
+        previous = store.get_meta(key)
+        if previous and now - timestamp(previous) < timedelta(hours=cfg.get('deduplicacao_horas', 24)):
+            return []
+        return [{'key': fingerprint + ':' + offer['link'], 'payload': format_alert(offer, evaluation),
+                 'date': offer['data'], 'fingerprint': key}]
+    if category == 'SSD':
+        evaluation = evaluate_offer(offer, cfg, purchases)
+        offer['avaliacao'] = evaluation['classificacao']
+        if ((cfg.get('montagem') and category not in cfg['montagem'])
+                or category in evaluation['orcamento'].get('ja_possui', []) or evaluation.get('compativel') is False):
+            return []
+        price = offer.get('pix_centavos') or offer.get('anunciado_centavos') or offer.get('cartao_centavos')
+        if type(price) is not int or price <= 0 or 'Preço fora da faixa plausível; verificar erro ou produto diferente' in offer.get('verificar', []):
+            return []
+        if any('ambígu' in condition.lower() or 'mais de um preço' in condition.lower() for condition in offer.get('verificar', [])):
+            return []
+        freight = offer.get('frete_centavos')
+        total = price + freight if type(freight) is int else price
+        target = evaluation.get('meta_centavos')
+        if target is not None and total > target:
+            return []
+        notes = ['Confirme capacidade, modelo, garantia e o valor final com frete.']
+        if offer.get('pix_centavos') is None and offer.get('anunciado_centavos') is None:
+            notes.append('Preço disponível apenas no cartão; confirme o preço à vista.')
+        evaluation = dict(evaluation, classificacao='AVALIAR SSD NVMe',
+                          justificativa=notes + evaluation['justificativa'])
+        fingerprint = notification_key(offer, evaluation)
+        key = 'dedupe:' + fingerprint
+        previous = store.get_meta(key)
+        if previous and now - timestamp(previous) < timedelta(hours=cfg.get('deduplicacao_horas', 24)):
+            return []
+        return [{'key': fingerprint + ':' + offer['link'], 'payload': format_alert(offer, evaluation),
+                 'date': offer['data'], 'fingerprint': key}]
     if offer.get('peca') == 'RX 9070 XT 16GB':
         from rx9070 import price_candidates, tier
         from notifications import money
@@ -183,13 +241,13 @@ def make_notifications(store, offer, cfg, purchases, now):
     # price. Surface promising leads without changing the financial projection.
     announced = offer.get('anunciado_centavos')
     target = evaluation.get('meta_centavos')
-    categories = {'CPU', 'GPU', 'PLACA-MAE', 'RAM', 'FONTE', 'COOLER-CPU', 'GABINETE'}
+    categories = {'CPU', 'GPU', 'PLACA-MAE', 'RAM', 'FONTE', 'COOLER-CPU', 'GABINETE', 'SSD'}
     broad = {'PLACA-MAE', 'RAM', 'FONTE', 'COOLER-CPU', 'GABINETE'}
     discovery = cfg.get('alternativas_gerais', {})
     margin = discovery.get('margem_percentual', 25) if offer.get('categoria') in broad and discovery.get('ativado') else 0
     budget_lead = (cfg.get('alertar_orcamento_incerto') and evaluation['classificacao'] == 'NÃO COMPENSA'
         and evaluation['orcamento'].get('conclusao_viavel') is False
-        and (offer.get('categoria') in {'CPU', 'PLACA-MAE', 'RAM'} or any(
+        and (offer.get('categoria') in {'CPU', 'PLACA-MAE', 'RAM', 'SSD'} or any(
             p.get('categoria') == offer.get('categoria') and p.get('monitorar_novamente', False) for p in purchases))
         and offer.get('categoria') not in evaluation['orcamento'].get('ja_possui', [])
         and evaluation.get('compativel') is not False)
@@ -312,13 +370,18 @@ async def deliver_pending(store, notifier, max_age_minutes=30, gemini_config=Non
         limit = settings.get('limite_diario', 20)
         day_key = 'gemini_calls:' + utcnow().date().isoformat()
         used = store.get_meta(day_key, 0)
-        if not payload.startswith(('🔥 RX 9070 XT', '🔥 LOJA —')) and settings.get('ativado') and key and isinstance(limit, int) and 0 < limit <= 1000 and used < limit:
+        is_ram = '\nRAM desejada: 1×16 GB;' in payload
+        if not is_ram and not payload.startswith(('🔥 RX 9070 XT', '🔥 LOJA —')) and settings.get('ativado') and key and isinstance(limit, int) and 0 < limit <= 1000 and used < limit:
             # Count attempts before the request, including failures and restarts.
             store.set_meta(day_key, used + 1)
             try:
                 from gemini import explain
                 comment = await asyncio.to_thread(explain, payload, key, settings.get('modelo', 'gemini-3.5-flash-lite'))
-                payload = payload[:3200] + '\n\nAnálise Gemini (gerada por IA; confira):\n' + comment
+                checked = re.sub(r'\b(?:sem|zero|s\s*/)\s+juros\b', '', comment, flags=re.I)
+                if re.search(r'empr[eé]stim|financiar|financiamento|rotativo|juros|encargos', checked, re.I):
+                    LOG.warning('Comentário Gemini com sugestão financeira inadequada foi omitido; alerta local preservado.')
+                else:
+                    payload = payload[:3200] + '\n\nAnálise Gemini (gerada por IA; confira):\n' + comment
             except Exception:
                 LOG.warning('Gemini indisponível; enviando análise local. Confira chave, modelo e cota.')
         try:

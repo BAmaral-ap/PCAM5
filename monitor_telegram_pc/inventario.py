@@ -8,7 +8,8 @@ from datetime import datetime, timezone
 
 from finance import validate_purchase
 
-UPDATE_ID = 'montagem-confirmada-2026-11-v1'
+OLD_UPDATE_ID = 'montagem-confirmada-2026-11-v1'
+UPDATE_ID = 'montagem-confirmada-2026-11-v2-ram-ssd'
 PURCHASES = [
     {'ref_confirmacao':'cooler-2026-11', 'categoria':'COOLER-CPU', 'modelo':'ARCTIC Freezer 36 A-RGB Black',
      'total_centavos':21581, 'pagamento':'pix', 'parcelas':1, 'parcelas_pagas':0,
@@ -26,6 +27,7 @@ PURCHASES = [
 
 def updated_config(config):
     cfg = copy.deepcopy(config)
+    previous_update = cfg.get('pcam5_atualizacao_montagem')
     limits = cfg.setdefault('orcamento', {})
     pending = limits.get('entradas_pendentes', [])
     confirmed = limits.get('entradas_confirmadas', [])
@@ -42,10 +44,15 @@ def updated_config(config):
     if not site_confirmed and not any(site(entry) for entry in pending):
         pending.append({'descricao':'desenvolvimento de site', 'valor_centavos':500000,
                         'status':'pendente', 'incluida_no_previsto':True})
-    limits.update(pix=None, total_maximo=9450, previsto_total=9450, entradas_pendentes=pending)
+    if previous_update not in {OLD_UPDATE_ID, UPDATE_ID}:
+        limits.update(pix=None, total_maximo=9450, previsto_total=9450)
+    limits['entradas_pendentes'] = pending
     if confirmed:
         limits['entradas_confirmadas'] = confirmed
-    cfg.setdefault('metas', {})['Ryzen 7 7800X3D'] = 1750
+    metas = cfg.setdefault('metas', {})
+    if previous_update not in {OLD_UPDATE_ID, UPDATE_ID}:
+        metas['Ryzen 7 7800X3D'] = 1750
+    metas['SSD NVMe'] = 700
     cfg['meta_7800x3d_inclui_frete'] = True
     cfg['alertar_orcamento_incerto'] = True
     cfg['pcam5_atualizacao_montagem'] = UPDATE_ID
@@ -55,19 +62,36 @@ def updated_config(config):
         build.setdefault(category, {})['modelo'] = model
         # Purchase ledger is the single source of truth for acquisition status.
         build[category]['possui'] = False
-    if 'CPU' in build: build['CPU']['estimativa_pix'] = 1750
-    if 'GPU' in build: build['GPU']['estimativa_pix'] = 5100
+    if previous_update not in {OLD_UPDATE_ID, UPDATE_ID}:
+        if 'CPU' in build: build['CPU']['estimativa_pix'] = 1750
+        if 'GPU' in build: build['GPU']['estimativa_pix'] = 5100
+    memory = build.setdefault('RAM', {})
+    memory.update(pagamento='cartao', fonte_pagamento='renda_pessoal_separada',
+                  parcelamento='cartao_sem_juros')
+    ssd = build.setdefault('SSD', {})
+    if previous_update != UPDATE_ID:
+        if ssd.get('possui', False) or not ssd.get('estimativa_pix'):
+            ssd['estimativa_pix'] = 700
+        if ssd.get('possui', False):
+            ssd['estimativa_cartao'] = None
+        ssd.update(modelo='SSD NVMe', possui=False, pagamento='pix')
+    else:
+        ssd.setdefault('estimativa_pix', 700)
     profiles=cfg.setdefault('perfis', {})
-    profiles['ARCTIC Freezer 36 A-RGB Black'] = {'altura_mm':159, 'sockets':['AM5'], 'compativel':True}
-    profiles['Montech XR White'] = {'gpu_max_mm':420, 'cooler_max_mm':175, 'cor':'branco',
-        'tipo':'Mid-Tower', 'ventoinhas_incluidas':3, 'ventoinhas_tipo':'ARGB PWM',
-        'formatos_placa_mae':['ATX','MATX','MICRO-ATX','MINI-ITX','ITX'],
-        'formato_fonte':'ATX', 'compativel':True}
-    profiles['Pichau Cluster 850W PG-CL850-BK01'] = {'potencia_w':850,
-        'conectores':{'pcie_6_2':True,'12v_2x6':True}, 'padrao':'ATX 3.1',
-        'formato':'ATX', 'certificacao':'Cybenetics Gold', 'modularidade':'Full modular', 'compativel':True}
-    cfg['observacao_orcamento'] = ('R$ 9.450 é previsão total condicional incluindo RAM no cartão; '
-        'não representa dinheiro disponível. O crédito não é receita. Custos e fretes das peças faltantes são estimativas.')
+    confirmed_profiles = {
+        'ARCTIC Freezer 36 A-RGB Black': {'altura_mm':159, 'sockets':['AM5'], 'compativel':True},
+        'Montech XR White': {'gpu_max_mm':420, 'cooler_max_mm':175, 'cor':'branco',
+            'tipo':'Mid-Tower', 'ventoinhas_incluidas':3, 'ventoinhas_tipo':'ARGB PWM',
+            'formatos_placa_mae':['ATX','MATX','MICRO-ATX','MINI-ITX','ITX'], 'formato_fonte':'ATX', 'compativel':True},
+        'Pichau Cluster 850W PG-CL850-BK01': {'potencia_w':850, 'conectores':{'pcie_6_2':True,'12v_2x6':True},
+            'padrao':'ATX 3.1', 'formato':'ATX', 'certificacao':'Cybenetics Gold', 'modularidade':'Full modular', 'compativel':True},
+    }
+    for model, facts in confirmed_profiles.items():
+        profile = profiles.setdefault(model, {})
+        for key, value in facts.items():
+            profile.setdefault(key, value)
+    cfg['observacao_orcamento'] = ('A previsão total inclui RAM parcelada paga com renda pessoal separada; '
+        'não representa saldo à vista disponível. Crédito não é receita. A meta do SSD é R$ 700, não preço confirmado.')
     return cfg
 
 
@@ -96,37 +120,63 @@ def _is_same(existing, wanted):
     return reference in name
 
 
-def _expire_obsolete_pending(db):
-    """Expire only queued alerts that can be tied unambiguously to a purchased part."""
-    categories = {'FONTE', 'GABINETE', 'COOLER-CPU'}
+def _refresh_pending(store, cfg=None):
+    """Preserve history and re-evaluate queued RAM alerts under the new policy."""
+    db = store.db
+    categories = {'FONTE', 'GABINETE', 'COOLER-CPU', 'RAM'}
     offers = [json.loads(row['payload']) for row in db.execute('SELECT payload FROM offers')]
     shop_items = []
     if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='shop_targets'").fetchone():
         shop_items = [json.loads(row['item']) for row in db.execute('SELECT item FROM shop_targets')]
     for row in db.execute("SELECT id,dedupe_key,payload FROM notifications WHERE state='pending'").fetchall():
         payload = row['payload']
-        telegram_match = any(
+        telegram_match = next((o for o in offers if
             o.get('categoria') in categories and o.get('link') and
             row['dedupe_key'].endswith(':' + o['link']) and
             ('Modelo identificado: ' + o.get('peca', '') + '\n') in payload
-            for o in offers
-        )
-        shop_match = any(
+        ), None)
+        shop_match = next((item for item in shop_items if
             item.get('categoria') in categories and item.get('nome') and item.get('url') and
             ('Produto: ' + item['nome'] + '\n') in payload and item['url'] in payload
-            for item in shop_items
-        )
+        ), None)
+        if telegram_match and telegram_match['categoria'] == 'RAM' and cfg is not None:
+            try:
+                from parsing import parse_offers
+                from runtime import make_notifications
+                class FreshDedupe:
+                    def get_meta(self, key, default=None):
+                        return None if key.startswith('dedupe:') else store.get_meta(key, default)
+                original = telegram_match
+                date = datetime.fromisoformat(original['data'].replace('Z', '+00:00'))
+                offers_now = parse_offers(original['canal'], original['message_id'], date, original['texto'], cfg)
+                current = next((offer for offer in offers_now if offer['peca'] == original['peca']), None)
+                pending = make_notifications(FreshDedupe(), current, cfg, store.purchases(), datetime.now(timezone.utc)) if current else []
+                if pending:
+                    db.execute("UPDATE notifications SET payload=?,updated_at=? WHERE id=? AND state='pending'",
+                               (pending[0]['payload'], datetime.now(timezone.utc).isoformat(), row['id']))
+                    continue
+            except (ValueError, TypeError, KeyError):
+                pass
+        if shop_match and shop_match['categoria'] == 'RAM':
+            lines = payload.splitlines()
+            if lines:
+                lines[0] = '🔥 LOJA — RAM — VERIFICAR PREÇO E PARCELAMENTO'
+                lines.insert(1, '⚠️ Parcelamento sem juros ainda não confirmado. Confirme o total no cartão e 1×16 GB.')
+                db.execute("UPDATE notifications SET payload=?,updated_at=? WHERE id=? AND state='pending'",
+                           ('\n'.join(lines), datetime.now(timezone.utc).isoformat(), row['id']))
+                continue
         if telegram_match or shop_match:
             db.execute("UPDATE notifications SET state='expired',updated_at=? WHERE id=? AND state='pending'",
                        (datetime.now(timezone.utc).isoformat(), row['id']))
 
 
-def apply_confirmed(store):
+def apply_confirmed(store, config=None):
     """Atomic ledger migration; conflicts abort without modifying the ledger."""
     db=store.db
     with db:
         db.execute('BEGIN IMMEDIATE')
         existing=store.purchases()
+        first_update = not store.get_meta(UPDATE_ID)
         ops=[]
         for raw in PURCHASES:
             wanted=validate_purchase(raw)
@@ -147,6 +197,8 @@ def apply_confirmed(store):
                 for key,value in wanted.items():
                     if key == 'modelo' or key not in merged:
                         merged[key]=value
+                if first_update:
+                    merged.pop('monitorar_novamente', None)
                 ops.append(('update',old['id'],merged))
             else:
                 ops.append(('insert',None,wanted))
@@ -157,7 +209,14 @@ def apply_confirmed(store):
                 db.execute('UPDATE purchases SET payload=? WHERE id=?',(encoded,ident))
             else:
                 db.execute('INSERT INTO purchases(payload,created_at) VALUES (?,?)',(encoded,now))
-        _expire_obsolete_pending(db)
+        if first_update:
+            for old in existing:
+                if old.get('categoria') in {'SSD', 'RAM'} and not old.get('monitorar_novamente', False):
+                    ident = old.pop('id')
+                    old['monitorar_novamente'] = True
+                    db.execute('UPDATE purchases SET payload=? WHERE id=?',
+                               (json.dumps(old,ensure_ascii=False,sort_keys=True,separators=(',',':')), ident))
+        _refresh_pending(store, config)
         db.execute('INSERT OR REPLACE INTO metadata(key,value) VALUES (?,?)',(UPDATE_ID,json.dumps(True)))
     return len(ops)
 

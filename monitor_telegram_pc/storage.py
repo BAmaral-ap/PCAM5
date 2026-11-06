@@ -20,7 +20,8 @@ from typing import Any
 LEGACY_FIELDS = ["data", "canal", "peca", "categoria", "preco", "meta",
                  "diferenca_meta", "avaliacao", "cupom", "link", "link_loja", "texto"]
 EXTRA_FIELDS = ["message_id", "pix_centavos", "cartao_centavos", "anunciado_centavos",
-                "parcelas", "loja", "condicoes", "verificar", "modelo_exato", "origem"]
+                "parcelas", "parcelamento_sem_juros", "total_parcelado_sem_juros_centavos",
+                "loja", "condicoes", "verificar", "modelo_exato", "origem"]
 
 
 def _json(value: Any) -> str:
@@ -298,7 +299,7 @@ class Store:
                         category, model, target = product
                         payload.update(categoria=category, peca=model, meta=target)
                         cents = payload["anunciado_centavos"]
-                        payload["diferenca_meta"] = cents / 100 - float(target) if cents is not None else ""
+                        payload["diferenca_meta"] = cents / 100 - float(target) if cents is not None and target is not None else ""
                     payload["verificar"].append("Classificação revista; preço original preservado.")
                 cur = self.db.execute("""INSERT OR IGNORE INTO imported_rows
                     (source,row_number,row_hash,raw_payload,processed_payload,imported_at)

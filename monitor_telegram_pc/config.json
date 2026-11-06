@@ -50,7 +50,8 @@
     "DDR5 1x16GB": 1500,
     "XPG Core Reactor II VE 850W": 490,
     "Air cooler CPU": 200,
-    "Gabinete": 250
+    "Gabinete": 250,
+    "SSD NVMe": 700
   },
   "montagem": {
     "CPU": {
@@ -79,7 +80,9 @@
       "estimativa_pix": 1500,
       "estimativa_cartao": 1500,
       "pagamento": "cartao",
-      "possui": false
+      "possui": false,
+      "fonte_pagamento": "renda_pessoal_separada",
+      "parcelamento": "cartao_sem_juros"
     },
     "FONTE": {
       "modelo": "Pichau Cluster 850W PG-CL850-BK01",
@@ -103,11 +106,11 @@
       "possui": false
     },
     "SSD": {
-      "modelo": "SSD já adquirido",
-      "estimativa_pix": 0,
-      "estimativa_cartao": 0,
+      "modelo": "SSD NVMe",
+      "estimativa_pix": 700,
+      "estimativa_cartao": null,
       "pagamento": "pix",
-      "possui": true
+      "possui": false
     }
   },
   "compatibilidade": {
@@ -183,7 +186,7 @@
       "compativel": true
     }
   },
-  "observacao_orcamento": "R$ 9.450 é previsão total condicional incluindo RAM no cartão; não representa dinheiro disponível. O crédito não é receita. Custos e fretes das peças faltantes são estimativas.",
+  "observacao_orcamento": "A previsão total inclui RAM parcelada paga com renda pessoal separada; não representa saldo à vista disponível. Crédito não é receita. A meta do SSD é R$ 700, não preço confirmado.",
   "gemini": {
     "ativado": true,
     "modelo": "gemini-3.5-flash-lite",
@@ -197,5 +200,5 @@
   },
   "meta_7800x3d_inclui_frete": true,
   "alertar_orcamento_incerto": true,
-  "pcam5_atualizacao_montagem": "montagem-confirmada-2026-11-v1"
+  "pcam5_atualizacao_montagem": "montagem-confirmada-2026-11-v2-ram-ssd"
 }

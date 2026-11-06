@@ -27,8 +27,12 @@ class PrecoAnunciado(unittest.TestCase):
                             self.assertEqual(alerts, [])
                             continue
                         self.assertEqual(len(alerts),1)
-                        self.assertIn('VERIFICAR PREÇO',alerts[0]['payload'])
-                        self.assertIn('Forma avaliada: não informado',alerts[0]['payload'])
+                        if category == 'RAM':
+                            self.assertIn('VERIFICAR PARCELAMENTO',alerts[0]['payload'])
+                            self.assertIn('Parcelamento sem juros ainda não confirmado', alerts[0]['payload'])
+                        else:
+                            self.assertIn('VERIFICAR PREÇO',alerts[0]['payload'])
+                            self.assertIn('Forma avaliada: não informado',alerts[0]['payload'])
                         self.assertIn('PIX: não informado | Cartão total: não informado',alerts[0]['payload'])
                         self.assertNotIn('COMPRAR AGORA',alerts[0]['payload'])
     def test_expensive_or_fan_excluded(self):

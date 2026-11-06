@@ -148,7 +148,9 @@ Inicialmente, `excepcional_percentual: 10` exige 10% ou mais abaixo da meta; `bo
 - **VERIFICAR:** preço, pagamento, meta ou extração ambíguos; não há certeza suficiente para recomendar.
 - **AVALIAR ALTERNATIVA:** anúncio sem modelo cadastrado dentro da margem de triagem. Confira modelo, qualidade, compatibilidade e orçamento; a etiqueta não comprova que o produto seja bom.
 
-As duas primeiras classes e `AVALIAR ALTERNATIVA` notificam por padrão. A triagem ampliada aceita até 25% acima da meta da peça de referência; ajuste `alternativas_gerais.margem_percentual` ou desative `alternativas_gerais.ativado` em `config.json`. Com orçamento pendente, CPU, placa-mãe e RAM ainda podem gerar alerta provisório pedindo verificação do orçamento. Preços ou condições ambíguos não entram na triagem de alternativas. Ventoinhas não fazem parte dessa ampliação. Ofertas rejeitadas permanecem no banco.
+As duas primeiras classes e `AVALIAR ALTERNATIVA` notificam por padrão. A triagem ampliada aceita até 25% acima da meta da peça de referência; ajuste `alternativas_gerais.margem_percentual` ou desative `alternativas_gerais.ativado` em `config.json`. Com orçamento pendente, CPU, placa-mãe, RAM e SSD ainda podem gerar alerta provisório para verificação. O SSD tem limite próprio de R$ 700; o preço final com frete deve ser confirmado. Preços ou condições ambíguos não entram na triagem de alternativas. Ventoinhas não fazem parte dessa ampliação. Ofertas rejeitadas permanecem no banco.
+
+A RAM deve ser 1×16 GB DDR5, no cartão parcelado sem juros. A oferta com juros não é recomendada. Quando o anúncio não comprova as condições no cartão, o alerta diz **“Parcelamento sem juros ainda não confirmado”**; um valor no PIX nunca é convertido em valor no cartão. Quando ambos são informados, o alerta mostra os dois totais e a diferença. O Gemini não complementa alertas de RAM, para não contradizer essa regra de pagamento.
 
 ### Compatibilidade e alternativas
 
@@ -196,9 +198,9 @@ A identidade específica prevalece sobre a família genérica. Complete `perfis`
 
 O relatório separa reserva PIX, crédito, compras, parcelas por mês, peças faltantes e total projetado. Crédito não é dinheiro recebido nem aumenta o saldo PIX.
 
-O orçamento **previsto** é de R$ 9.450,00, condicionado às entradas planejadas e incluindo R$ 5.000 ainda pendentes pelo site. Não representa dinheiro disponível agora; o saldo disponível no PIX aparece como `null` até ser informado. O limite de cartão não é receita. A RAM permanece prevista no cartão e seu custo entra no total da montagem.
+O orçamento global **previsto** anterior de R$ 9.450,00 permanece no cadastro, condicionado às entradas planejadas; R$ 5.000 pelo site continuam pendentes. Esse valor não representa saldo disponível nem uma reserva à vista confirmada. O limite do cartão não é receita. A RAM fica no custo total do PC, mas suas parcelas serão pagas com outra renda pessoal, separada da reserva à vista, dos R$ 5.000 do site e dos recursos de dezembro. O valor disponível dessa outra renda não foi informado.
 
-As compras confirmadas somam R$ 927,98; o saldo previsto restante é R$ 8.522,02. As estimativas atuais das quatro peças faltantes, somadas às compras, dão R$ 9.957,98, acima da previsão em R$ 507,98, antes de fretes não informados. São referências, não preços finais garantidos. A meta de R$ 1.750 para o 7800X3D inclui frete; se ele não estiver disponível, o alerta pede confirmação do total entregue.
+As compras confirmadas somam R$ 927,98 e o saldo restante da referência global é R$ 8.522,02. Com as estimativas atuais das cinco peças faltantes, o custo do PC é R$ 10.657,98: R$ 9.157,98 em compras à vista, incluindo as já feitas, e R$ 1.500 estimados para RAM no cartão. O valor à vista não é uma afirmação de que esse dinheiro já está disponível. A projeção global supera a referência de R$ 9.450 em R$ 1.207,98; RAM e SSD ainda são estimativas. O SSD de R$ 700 é uma reserva de planejamento no máximo informado, não um preço confirmado. A meta de R$ 1.750 para o 7800X3D inclui frete; se ele não estiver disponível, o alerta pede confirmação do total entregue.
 
 `orcamento.total_maximo` é a referência total da montagem, não dinheiro disponível. Parcelas já pagas continuam consumindo esse teto: liberar crédito não cria orçamento adicional. Inclua frete, juros e acessórios nas estimativas e no total confirmado da compra. Se souber o saldo inicial reservado para a montagem, informe `orcamento.pix` com atenção às compras já registradas.
 
@@ -211,9 +213,9 @@ Pare o monitor e, no computador com o banco existente, execute:
 .\.venv\Scripts\python.exe monitor.py --budget
 ```
 
-O comando registra cooler ARCTIC Freezer 36 (R$ 215,81), Montech XR White (R$ 317,12) e Pichau Cluster 850W (R$ 395,05). Ele reconhece o cooler antigo, não duplica os registros e interrompe sem mudar as compras se encontrar conflito de valor ou pagamento. A fonte fica paga e comprada, com entrega em preparação. O gabinete é registrado como `avista` porque a forma específica não foi informada. O comando preserva os canais e demais configurações existentes; uma repetição não desfaz alterações posteriores.
+O comando registra cooler ARCTIC Freezer 36 (R$ 215,81), Montech XR White (R$ 317,12) e Pichau Cluster 850W (R$ 395,05), marca o SSD como necessário e atualiza a política da RAM. Ele reconhece o cooler antigo, não duplica os registros e interrompe sem mudar as compras se encontrar conflito de valor ou pagamento. A fonte fica paga e comprada, com entrega em preparação. O gabinete é registrado como `avista` porque a forma específica não foi informada. Histórico anterior de SSD é preservado sem presumir que o item ainda está disponível. O comando preserva os canais e as configurações personalizadas; uma repetição não desfaz alterações posteriores.
 
-Fonte, gabinete e coolers deixam de gerar alertas de compra, enquanto GPU, CPU, placa-mãe e RAM continuam. Quando a frequência da RAM é identificada, o alerta destaca a faixa preferida de 5600–6000 MHz; uma opção de outra frequência não é descartada automaticamente nem se exige CL30. Para reativar uma categoria sem apagar o histórico nem presumir estorno, pare o monitor e use, por exemplo:
+Fonte, gabinete e coolers deixam de gerar alertas de compra, enquanto GPU, CPU, placa-mãe, RAM e SSD NVMe continuam. Priorize SSDs de 1 TB ou 500 GB até R$ 700 e confira o frete. Quando a velocidade da RAM é identificada, o alerta destaca a faixa preferida de 5600–6000 MT/s e reproduz a unidade anunciada; uma opção fora da faixa não é descartada automaticamente nem se exige CL30. Para reativar uma categoria sem apagar o histórico nem presumir estorno, pare o monitor e use, por exemplo:
 
 ```powershell
 .\.venv\Scripts\python.exe monitor.py --reativar-categoria FONTE --confirmar
@@ -234,6 +236,8 @@ O registro exige JSON e `--confirmar`. Exemplo ilustrativo de RAM comprada por R
   "modelo": "Modelo comercial exato da RAM comprada",
   "total_centavos": 180000,
   "pagamento": "cartao",
+  "juros": "sem_juros",
+  "fonte_pagamento": "renda_pessoal_separada",
   "parcelas": 3,
   "primeira_parcela": "2026-11",
   "parcelas_pagas": 0

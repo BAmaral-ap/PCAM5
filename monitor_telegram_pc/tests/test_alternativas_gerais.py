@@ -25,8 +25,12 @@ class AlternativasTests(unittest.TestCase):
             with self.subTest(title=title):
                 offer, result = self.analyze(f'{title}\nR$ {amount} no PIX')
                 self.assertEqual(offer['categoria'], category)
-                self.assertEqual(result['classificacao'], 'AVALIAR ALTERNATIVA')
-                self.assertIsNotNone(result['preco_centavos'])
+                expected = 'VERIFICAR PARCELAMENTO' if category == 'RAM' else 'AVALIAR ALTERNATIVA'
+                self.assertEqual(result['classificacao'], expected)
+                if category == 'RAM':
+                    self.assertIsNone(result['preco_centavos'])  # preço PIX não é preço no cartão
+                else:
+                    self.assertIsNotNone(result['preco_centavos'])
     def test_ventoinhas_are_not_alternatives(self):
         _, result = self.analyze('Kit de ventoinhas gabinete\nR$ 90 no PIX')
         self.assertNotEqual(result['classificacao'], 'AVALIAR ALTERNATIVA')

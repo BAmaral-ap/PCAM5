@@ -62,7 +62,11 @@ def _event(previous, current, target, reduction):
 def _message(item, current, previous, event, observed, hint, cfg, purchases=()):
     fields = [('Preço público', 'preco_publico_centavos'), ('Preço PIX', 'preco_pix_centavos'),
               ('Preço cartão', 'preco_cartao_centavos')]
-    lines = [f"🔥 LOJA — {event}", f"Produto: {item['nome']}", f"Loja: {item['loja']}"]
+    display_event = 'RAM — VERIFICAR PREÇO E PARCELAMENTO' if item.get('categoria') == 'RAM' else event
+    lines = [f"🔥 LOJA — {display_event}", f"Produto: {item['nome']}", f"Loja: {item['loja']}"]
+    if item.get('categoria') == 'RAM':
+        lines.append('⚠️ Parcelamento sem juros ainda não confirmado. Confirme o total no cartão e 1×16 GB.')
+        lines.append('As parcelas da RAM serão pagas com renda pessoal separada da reserva à vista.')
     for label, key in fields:
         current_price = current.get(key)
         old = (previous or {}).get(key)

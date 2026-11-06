@@ -174,7 +174,22 @@ class ShopMonitor:
                 bought = {p.get('categoria') for p in self.tracking.store.purchases() if not p.get('monitorar_novamente', False)}
                 owned = self.config.get('montagem', {}).get(item['categoria'], {}).get('possui', False)
                 can_notify = self.notifications_enabled and item['categoria'] not in bought and not owned
-                event = self.tracking.success(item, self.now(), observation, self.config,
+                target_item = item
+                if item['categoria'] == 'RAM':
+                    title = item['nome']
+                    kit = re.search(r'\b(\d+)\s*[x×]\s*(\d+)\s*gb\b', title, re.I)
+                    if re.search(r'\b(?:so[ -]?dimm|notebook)\b', title, re.I) or (kit and (int(kit[1]), int(kit[2])) != (1, 16)):
+                        can_notify = False
+                if item['categoria'] == 'SSD' and self.config.get('metas', {}).get('SSD NVMe') is not None:
+                    from finance import cents
+                    cap = cents(self.config['metas']['SSD NVMe'])
+                    target_item = dict(item, meta_centavos=min(item['meta_centavos'], cap))
+                    values = [observation.get(field) for field in ('preco_publico_centavos', 'preco_sem_cupom_centavos',
+                                                                    'preco_pix_centavos', 'preco_cartao_centavos')]
+                    shipping = observation.get('frete_centavos') or 0
+                    if not any(type(value) is int and value + shipping <= cap for value in values):
+                        can_notify = False
+                event = self.tracking.success(target_item, self.now(), observation, self.config,
                                               notify=can_notify, reduction=threshold)
                 LOG.info('%s: consulta %s%s.', item['id'], observation['status'], '; alerta enfileirado' if event and can_notify else '')
                 return True
