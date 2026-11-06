@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import tempfile
 
 from dotenv import load_dotenv
 from telethon import TelegramClient
@@ -216,6 +217,8 @@ def main(argv=None):
     actions.add_argument('--reprocess', action='store_true')
     actions.add_argument('--purchase', type=Path, help='JSON com compra já realizada; exige --confirmar')
     actions.add_argument('--pay-installment', type=int, metavar='ID', help='Registrar parcela já paga; exige --confirmar')
+    actions.add_argument('--atualizar-montagem', action='store_true', help='Registrar compras confirmadas e atualizar orçamento; exige --confirmar')
+    actions.add_argument('--reativar-categoria', choices=['FONTE', 'GABINETE', 'COOLER-CPU'], help='Voltar a monitorar categoria adquirida; exige --confirmar')
     actions.add_argument('--notifications-status', action='store_true')
     actions.add_argument('--lojas', action='store_true', help='Consultar apenas lojas configuradas; --watch mantém em execução')
     actions.add_argument('--lojas-status', action='store_true', help='Mostrar últimas verificações e preços das lojas')
@@ -226,7 +229,7 @@ def main(argv=None):
         parser.error('Use --limit entre 1 e 500; --days >= 1; --interval >= 1.')
     if args.history_days is not None and args.history_days < 1:
         parser.error('--history-days deve ser positivo.')
-    if (args.purchase or args.pay_installment is not None) and not args.confirmar:
+    if (args.purchase or args.pay_installment is not None or args.atualizar_montagem or args.reativar_categoria) and not args.confirmar:
         parser.error('Registro financeiro requer confirmação explícita: --confirmar. Nenhuma compra foi registrada.')
     try:
         cfg = load_config(args.config)
@@ -279,7 +282,38 @@ def main(argv=None):
             print('Alerta de teste enviado ao chat privado.')
             return
         with instance_lock(args.db), Store(args.db) as store:
-            if args.purchase:
+            if args.atualizar_montagem:
+                from inventario import UPDATE_ID, apply_confirmed, updated_config
+                raw = json.loads(args.config.read_text(encoding='utf-8-sig'))
+                if store.get_meta(UPDATE_ID) and raw.get('pcam5_atualizacao_montagem') == UPDATE_ID:
+                    print_json({'status': 'atualização já aplicada; dados preservados', 'orcamento': budget_snapshot(cfg, store.purchases())})
+                else:
+                    updated = updated_config(raw)
+                    temporary = None
+                    try:
+                        with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=args.config.parent,
+                                                         prefix='.pcam5-atualizacao-', suffix='.json', delete=False) as stream:
+                            temporary = Path(stream.name)
+                            json.dump(updated, stream, ensure_ascii=False, indent=2)
+                            stream.write('\n')
+                            stream.flush()
+                            os.fsync(stream.fileno())
+                        load_config(temporary)
+                        apply_confirmed(store)
+                        try:
+                            os.replace(temporary, args.config)
+                        except OSError:
+                            raise ValueError('Compras registradas, mas configuração não substituída. Execute novamente --atualizar-montagem --confirmar.') from None
+                    finally:
+                        if temporary is not None:
+                            temporary.unlink(missing_ok=True)
+                    print_json({'status': 'atualização aplicada', 'orcamento': budget_snapshot(updated, store.purchases()),
+                                'compras': store.purchases()})
+            elif args.reativar_categoria:
+                from inventario import reactivate
+                reactivate(store, args.reativar_categoria)
+                print('Categoria reativada; as compras e despesas anteriores foram preservadas.')
+            elif args.purchase:
                 item = validate_purchase(json.loads(args.purchase.read_text(encoding='utf-8-sig')))
                 if item['categoria'] not in cfg['montagem']:
                     raise ValueError('Categoria da compra não existe em montagem; confira config.json.')

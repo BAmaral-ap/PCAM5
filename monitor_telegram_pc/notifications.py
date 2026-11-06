@@ -84,6 +84,7 @@ def format_alert(offer, evaluation):
         offer.get('nome_completo') or offer['peca'],
         f"Modelo identificado: {offer['peca']}",
         f"Preço avaliado: {money(evaluation.get('preco_centavos') or offer.get('anunciado_centavos'))}",
+        *([f"Total entregue estimado: {money(evaluation['total_entregue_centavos'])}"] if evaluation.get('total_entregue_centavos') is not None else []),
         f"PIX: {money(offer.get('pix_centavos'))} | Cartão total: {money(offer.get('cartao_centavos'))}",
         f"Forma avaliada: {evaluation.get('pagamento', 'indefinida')} | Parcelas: {offer.get('parcelas') or 'não informadas'}",
         f"Meta: {money(evaluation.get('meta_centavos'))}",

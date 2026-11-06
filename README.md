@@ -31,7 +31,14 @@ O intervalo padrão é de 2 minutos. O notebook precisa estar ligado, conectado 
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-Metas, canais e estimativas ficam em `config.json`. O plano inicial estima R$ 8.020 no PIX e R$ 1.500 no cartão para RAM, total de R$ 9.520. A estimativa do cartão não confirma preço parcelado; crédito continua separado da reserva PIX. Compatibilidade confirmada manualmente e custos conhecidos são necessários para **COMPRAR AGORA**.
+Metas, canais e estimativas ficam em `config.json`. A atualização de novembro registra três compras (R$ 927,98), orçamento previsto de R$ 9.450,00 e saldo previsto de R$ 8.522,02, condicionado às entradas futuras. O crédito da RAM não é receita e o dinheiro disponível não foi informado. No computador que contém o banco existente, pare o monitor e execute:
+
+```powershell
+.\.venv\Scripts\python.exe monitor.py --atualizar-montagem --confirmar
+.\.venv\Scripts\python.exe monitor.py --budget
+```
+
+O cadastro reconhece o cooler já registrado e não duplica as compras ao ser repetido. Confira o [guia](monitor_telegram_pc/LEIA-ME.md) para reativar alertas e interpretar as estimativas.
 
 ## Segurança da sessão
 

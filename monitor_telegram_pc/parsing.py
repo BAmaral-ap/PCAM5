@@ -252,6 +252,36 @@ def extract_prices(text: str, category: str) -> list[float]:
     return [result[k] / 100 for k in ("pix_centavos", "cartao_centavos", "anunciado_centavos") if result[k] is not None]
 
 
+def _explicit_specs(text: str, category: str) -> dict[str, Any]:
+    """Use only explicit, unambiguous product specifications from its block."""
+    if category != 'GPU':
+        return {}
+    result = {}
+    patterns = {
+        'comprimento_mm': r'\bcomprimento\s*(?:(?:da|do)\s+(?:gpu|placa(?:\s+de\s+v[ií]deo)?))?\s*[:=]\s*(\d{2,4})\s*mm\b',
+        'fonte_minima_w': r'\bfonte\s+(?:m[ií]nima|recomendada)\s*(?::|=|de)?\s*(\d{3,4})\s*w\b',
+    }
+    for key, pattern in patterns.items():
+        values = {int(value) for value in re.findall(pattern, text, re.I)}
+        if len(values) == 1:
+            result[key] = values.pop()
+    connector = re.findall(
+        r'\bconectores?\s+(?:de\s+alimenta[cç][aã]o\s+da\s+(?:gpu|placa)|da\s+(?:gpu|placa))\s*[:=]\s*'
+        r'([1-9])\s*[x×]\s*(?:pcie\s*)?(?:8\s*pinos?|6\s*\+\s*2)\b', text, re.I)
+    if len(set(connector)) == 1:
+        result['conectores_requeridos'] = {'pcie_6_2': int(connector[0])}
+    return result
+
+
+def _shipping_belem(text: str) -> int | None:
+    pattern = r'\bfrete\s+para\s+bel[eé]m\s*[:=]\s*R\$\s*(\d[\d.,]*)'
+    values = {cents(value) for value in re.findall(pattern, text, re.I)}
+    values.discard(None)
+    if re.search(r'\bfrete\s+(?:gr[aá]tis|gratuito)\s+para\s+bel[eé]m\b', text, re.I):
+        values.add(0)
+    return values.pop() if len(values) == 1 else None
+
+
 def _offer(channel: str, msg_id: int, date: datetime, text: str, product: tuple,
            original: str, extra_verify: list[str] | None = None) -> dict[str, Any]:
     category, model, target, exact = product
@@ -287,6 +317,8 @@ def _offer(channel: str, msg_id: int, date: datetime, text: str, product: tuple,
         "cupom": extract_coupon(text), "link": f"https://t.me/{channel}/{msg_id}",
         "link_loja": seller, "texto": original, "loja": store_name,
         "modelo_exato": exact, **details,
+        "especificacoes": _explicit_specs(text, category),
+        "frete_centavos": _shipping_belem(text),
     }
 
 
@@ -295,7 +327,8 @@ def parse_offers(channel: str, msg_id: int, date: datetime, text: str,
     # Split only where actual product headings occur; keep multiline pricing,
     # links and coupon conditions with their respective product block.
     lines = text.splitlines()
-    starts = [(i, _products(line, config)) for i, line in enumerate(lines)]
+    starts = [(i, _products(line, config)) for i, line in enumerate(lines)
+              if not re.match(r'^\s*fonte\s+(?:m[ií]nima|recomendada)\b', line, re.I)]
     starts = [(i, products) for i, products in starts if products]
     if not starts:
         products = _products(text, config)

@@ -14,7 +14,7 @@ from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 
 from telethon.errors import FloodWaitError
 
-from finance import evaluate_offer
+from finance import evaluate_offer, _compatibility
 from notifications import DeliveryError, format_alert
 from parsing import parse_offers
 
@@ -89,6 +89,12 @@ def notification_key(offer, evaluation):
 def make_notifications(store, offer, cfg, purchases, now):
     if offer.get('categoria') == 'VENTOINHA':
         return []
+    category = offer.get('categoria')
+    if category in {'FONTE', 'GABINETE', 'COOLER-CPU'} and (
+        cfg.get('montagem', {}).get(category, {}).get('possui', False) or
+        any(p.get('categoria') == category and not p.get('monitorar_novamente', False) for p in purchases)
+    ):
+        return []
     # Match the product heading, rather than accessory specifications elsewhere
     # in a message (e.g. an AM4/AM5 cooler or PSU advice for a GPU).
     title = offer.get('nome_completo') or ''
@@ -111,6 +117,7 @@ def make_notifications(store, offer, cfg, purchases, now):
         offer['precos_candidatos_centavos'] = candidates
         from parsing import detect_product
         models = {product[1] for line in offer.get('texto', '').splitlines()
+                  if not re.match(r'^\s*fonte\s+(?:m[ií]nima|recomendada)\b', line, re.I)
                   if (product := detect_product(line))}
         if len(candidates) != 1 or len(models) > 1 or any('associação de preço ambígua' in v for v in offer.get('verificar', [])):
             offer['classificacao_preliminar'] = 'VERIFICAR PREÇO'
@@ -135,6 +142,23 @@ def make_notifications(store, offer, cfg, purchases, now):
             return []
         meta = round(float(cfg.get('metas', {}).get('RX 9070 XT 16GB', 5100)) * 100)
         link = offer.get('link_loja') or offer['link']
+        compatibility = ''
+        profiles = cfg.get('perfis', {})
+        owned = {p.get('categoria'): profiles.get(p.get('modelo'), {}) for p in purchases
+                 if not p.get('monitorar_novamente', False)}
+        case = owned.get('GABINETE', {})
+        power = owned.get('FONTE', {})
+        if case.get('gpu_max_mm') or power.get('potencia_w'):
+            compatible, notes = _compatibility(offer, cfg, purchases)
+            references = []
+            if case.get('gpu_max_mm'):
+                references.append(f"gabinete até {case['gpu_max_mm']} mm")
+            if power.get('potencia_w'):
+                references.append(f"fonte {power['potencia_w']} W")
+            state = 'INCOMPATIBILIDADE A VERIFICAR' if compatible is False else 'compatibilidade a confirmar'
+            compatibility = f"Compatibilidade: {state} ({', '.join(references)}); confira dimensões, potência e conectores.\n"
+            if compatible is False:
+                compatibility += '; '.join(notes) + '\n'
         payload = (f"🔥 RX 9070 XT — {label}\n"
                    f"Modelo anunciado: {offer.get('nome_completo') or offer['peca']}\n"
                    f"Preço anunciado: {money(value)}\n"
@@ -143,6 +167,7 @@ def make_notifications(store, offer, cfg, purchases, now):
                    f"Cupom: {offer.get('cupom') or 'não informado'}\n"
                    f"Origem: @{offer['canal']}\nMeta: {money(meta)}\n"
                    f"Diferença da meta: {money(value-meta)}\n"
+                   f"{compatibility}"
                    f"⚠️ Preço preliminar; confirme estoque, cupom e frete antes de comprar.\n"
                    f"{link}\nOrigem: {offer['link']}")
         fingerprint = notification_key(offer, {'preco_centavos': value, 'pagamento': 'anunciado'})
@@ -162,7 +187,14 @@ def make_notifications(store, offer, cfg, purchases, now):
     broad = {'PLACA-MAE', 'RAM', 'FONTE', 'COOLER-CPU', 'GABINETE'}
     discovery = cfg.get('alternativas_gerais', {})
     margin = discovery.get('margem_percentual', 25) if offer.get('categoria') in broad and discovery.get('ativado') else 0
-    uncertain_price = (evaluation['classificacao'] == 'VERIFICAR' and offer.get('categoria') in categories
+    budget_lead = (cfg.get('alertar_orcamento_incerto') and evaluation['classificacao'] == 'NÃO COMPENSA'
+        and evaluation['orcamento'].get('conclusao_viavel') is False
+        and (offer.get('categoria') in {'CPU', 'PLACA-MAE', 'RAM'} or any(
+            p.get('categoria') == offer.get('categoria') and p.get('monitorar_novamente', False) for p in purchases))
+        and offer.get('categoria') not in evaluation['orcamento'].get('ja_possui', [])
+        and evaluation.get('compativel') is not False)
+    uncertain_price = ((evaluation['classificacao'] == 'VERIFICAR' or budget_lead) and evaluation.get('preco_centavos') is None
+        and offer.get('categoria') in categories
         and offer.get('categoria') not in evaluation['orcamento'].get('ja_possui', [])
         and evaluation.get('compativel') is not False and type(announced) is int and announced > 0
         and type(target) is int and target > 0 and isinstance(margin, (int, float)) and 0 <= margin <= 100
@@ -173,7 +205,14 @@ def make_notifications(store, offer, cfg, purchases, now):
                           diferenca_centavos=announced-target,
                           diferenca_percentual=round((announced-target)*100/target, 2),
                           justificativa=['Preço anunciado sem forma de pagamento; confirme PIX, cartão, cupom e orçamento antes de decidir.'] + evaluation['justificativa'])
-    if not uncertain_price and evaluation['classificacao'] not in cfg.get('alertas', {}).get('classes', ['COMPRAR AGORA', 'BOA PROMOÇÃO']):
+    known_price = evaluation.get('total_entregue_centavos') or evaluation.get('preco_centavos')
+    budget_alert = (budget_lead and type(known_price) is int and known_price > 0 and type(target) is int and target > 0
+                    and known_price * 100 <= target * (100 + margin)
+                    and 'Preço fora da faixa plausível; verificar erro ou produto diferente' not in offer.get('verificar', []))
+    if budget_alert and not uncertain_price:
+        evaluation = dict(evaluation, classificacao='VERIFICAR ORÇAMENTO',
+                          justificativa=['Preço interessante; saldo disponível e custo total precisam ser confirmados.'] + evaluation['justificativa'])
+    if not uncertain_price and not budget_alert and evaluation['classificacao'] not in cfg.get('alertas', {}).get('classes', ['COMPRAR AGORA', 'BOA PROMOÇÃO']):
         return []
     fingerprint = notification_key(offer, evaluation)
     key = 'dedupe:' + fingerprint

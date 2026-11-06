@@ -14,9 +14,18 @@
   "idade_maxima_alerta_minutos": 30,
   "deduplicacao_horas": 24,
   "orcamento": {
-    "pix": 10000,
+    "pix": null,
     "cartao": 2500,
-    "total_maximo": 12500
+    "total_maximo": 9450,
+    "previsto_total": 9450,
+    "entradas_pendentes": [
+      {
+        "descricao": "desenvolvimento de site",
+        "valor_centavos": 500000,
+        "status": "pendente",
+        "incluida_no_previsto": true
+      }
+    ]
   },
   "alertas": {
     "excepcional_percentual": 10,
@@ -32,7 +41,7 @@
     "margem_percentual": 25
   },
   "metas": {
-    "Ryzen 7 7800X3D": 1700,
+    "Ryzen 7 7800X3D": 1750,
     "Ryzen 7 9800X3D": 2050,
     "RX 9070 XT 16GB": 5100,
     "RX 9070 16GB": 4200,
@@ -46,14 +55,14 @@
   "montagem": {
     "CPU": {
       "modelo": "Ryzen 7 7800X3D",
-      "estimativa_pix": 1700,
+      "estimativa_pix": 1750,
       "estimativa_cartao": null,
       "pagamento": "pix",
       "possui": false
     },
     "GPU": {
       "modelo": "RX 9070 XT 16GB",
-      "estimativa_pix": 4700,
+      "estimativa_pix": 5100,
       "estimativa_cartao": null,
       "pagamento": "pix",
       "possui": false
@@ -73,21 +82,21 @@
       "possui": false
     },
     "FONTE": {
-      "modelo": "XPG Core Reactor II VE 850W",
+      "modelo": "Pichau Cluster 850W PG-CL850-BK01",
       "estimativa_pix": 490,
       "estimativa_cartao": null,
       "pagamento": "pix",
       "possui": false
     },
     "COOLER-CPU": {
-      "modelo": "Air cooler CPU",
+      "modelo": "ARCTIC Freezer 36 A-RGB Black",
       "estimativa_pix": 200,
       "estimativa_cartao": null,
       "pagamento": "pix",
       "possui": false
     },
     "GABINETE": {
-      "modelo": "Gabinete",
+      "modelo": "Montech XR White",
       "estimativa_pix": 250,
       "estimativa_cartao": null,
       "pagamento": "pix",
@@ -136,9 +145,45 @@
     "XPG Core Reactor II VE 850W": {
       "compativel": true,
       "observacao": "Plataforma prevista; ainda exige confirmação manual de BIOS, dimensões, memória e conectores."
+    },
+    "ARCTIC Freezer 36 A-RGB Black": {
+      "altura_mm": 159,
+      "sockets": [
+        "AM5"
+      ],
+      "compativel": true
+    },
+    "Montech XR White": {
+      "gpu_max_mm": 420,
+      "cooler_max_mm": 175,
+      "cor": "branco",
+      "tipo": "Mid-Tower",
+      "ventoinhas_incluidas": 3,
+      "ventoinhas_tipo": "ARGB PWM",
+      "formatos_placa_mae": [
+        "ATX",
+        "MATX",
+        "MICRO-ATX",
+        "MINI-ITX",
+        "ITX"
+      ],
+      "formato_fonte": "ATX",
+      "compativel": true
+    },
+    "Pichau Cluster 850W PG-CL850-BK01": {
+      "potencia_w": 850,
+      "conectores": {
+        "pcie_6_2": true,
+        "12v_2x6": true
+      },
+      "padrao": "ATX 3.1",
+      "formato": "ATX",
+      "certificacao": "Cybenetics Gold",
+      "modularidade": "Full modular",
+      "compativel": true
     }
   },
-  "observacao_orcamento": "R$ 1.500 no cartão para RAM é estimativa de planejamento configurável, não preço parcelado verificado. Demais preços no cartão desconhecidos. Juros, frete e acessórios devem entrar no total confirmado da compra. Parcelas são compromissos de renda futura, não saldo PIX.",
+  "observacao_orcamento": "R$ 9.450 é previsão total condicional incluindo RAM no cartão; não representa dinheiro disponível. O crédito não é receita. Custos e fretes das peças faltantes são estimativas.",
   "gemini": {
     "ativado": true,
     "modelo": "gemini-3.5-flash-lite",
@@ -149,5 +194,8 @@
     "excelente": 4900,
     "boa_compra": 5100,
     "avaliar": 5300
-  }
+  },
+  "meta_7800x3d_inclui_frete": true,
+  "alertar_orcamento_incerto": true,
+  "pcam5_atualizacao_montagem": "montagem-confirmada-2026-11-v1"
 }

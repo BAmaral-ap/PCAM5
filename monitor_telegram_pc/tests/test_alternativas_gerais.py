@@ -6,7 +6,11 @@ from parsing import parse_offers
 from settings import load_config
 
 class AlternativasTests(unittest.TestCase):
-    def setUp(self): self.cfg = load_config()
+    def setUp(self):
+        self.cfg = load_config()
+        # Este teste cobre a montagem anterior à compra, com orçamento conhecido.
+        self.cfg['orcamento'].update(pix=10000, total_maximo=12500)
+        self.cfg['alertar_orcamento_incerto'] = False
     def analyze(self, text, cfg=None, purchases=None):
         offer = parse_offers('pcbuildwizard', 1, datetime.now(timezone.utc), text, cfg or self.cfg)[0]
         return offer, evaluate_offer(offer, cfg or self.cfg, purchases or [])
@@ -57,6 +61,8 @@ class AlternativeAlertTests(unittest.TestCase):
         import tempfile
         from pathlib import Path
         cfg = load_config(); now = datetime.now(timezone.utc)
+        cfg['orcamento'].update(pix=10000, total_maximo=12500)
+        cfg['alertar_orcamento_incerto'] = False
         with tempfile.TemporaryDirectory() as directory:
             store = Store(Path(directory) / 'state.sqlite3')
             try:

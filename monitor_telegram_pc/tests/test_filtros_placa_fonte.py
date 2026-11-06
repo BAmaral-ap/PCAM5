@@ -10,6 +10,8 @@ from storage import Store
 class FiltrosTests(unittest.TestCase):
     def setUp(self):
         self.cfg = load_config()
+        # Testa a regra de potência com uma categoria ainda não adquirida.
+        self.cfg['orcamento'].update(pix=10000, total_maximo=12500)
         self.now = datetime.now(timezone.utc)
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)

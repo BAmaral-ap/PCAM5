@@ -146,9 +146,11 @@ class ParsingTests(unittest.TestCase):
         self.assertFalse(offer['verificar'])
         self.assertEqual(offer['texto'], text)
         self.assertTrue(any('não verificada' in c for c in offer['condicoes']))
-        evaluation = evaluate_offer(offer, load_config(), [])
+        cfg = load_config()
+        cfg['orcamento'].update(pix=10000, total_maximo=12500)
+        evaluation = evaluate_offer(offer, cfg, [])
         self.assertEqual(evaluation['classificacao'], 'BOA PROMOÇÃO')
-        self.assertEqual(evaluation['diferenca_centavos'], -1651)
+        self.assertEqual(evaluation['diferenca_centavos'], -6651)
 
     def test_pix_coupon_does_not_change_card_total(self):
         offer = parse('Ryzen 7 7800X3D\nR$ 1.849,99 no PIX (R$ 1.683,49 com o cupom THEKING)\nCartão: R$ 1.999,00')[0]

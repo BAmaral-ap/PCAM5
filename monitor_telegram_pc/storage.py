@@ -228,14 +228,14 @@ class Store:
         if type(total) is not int or total <= 0:
             raise ValueError("Valor efetivamente pago precisa ser positivo, em centavos inteiros.")
         payment = item.get("pagamento")
-        if payment not in {"pix", "cartao"}:
-            raise ValueError("Pagamento precisa ser pix ou cartao.")
+        if payment not in {"pix", "avista", "cartao"}:
+            raise ValueError("Pagamento precisa ser pix, avista ou cartao.")
         count = item.setdefault("parcelas", 1)
         paid = item.setdefault("parcelas_pagas", 0)
         if type(count) is not int or not 1 <= count <= min(120, total) or type(paid) is not int or not 0 <= paid <= count:
             raise ValueError("Número de parcelas ou parcelas pagas inválido.")
-        if payment == "pix" and (count != 1 or paid != 0):
-            raise ValueError("Compra PIX não possui parcelamento nem parcelas de cartão pagas.")
+        if payment in {"pix", "avista"} and (count != 1 or paid != 0):
+            raise ValueError("Compra à vista não possui parcelamento nem parcelas de cartão pagas.")
         if payment == "cartao":
             month = item.get("primeira_parcela", "")
             if not re.fullmatch(r"\d{4}-(?:0[1-9]|1[0-2])", month):

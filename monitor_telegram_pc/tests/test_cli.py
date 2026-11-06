@@ -17,6 +17,10 @@ class CliTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.directory = Path(self.temp.name)
         self.db = self.directory / 'db.sqlite3'
+        self.config = self.directory / 'config.json'
+        cfg = json.loads((Path(__file__).resolve().parents[1] / 'config.json').read_text(encoding='utf-8'))
+        cfg['orcamento'].update(pix=10000, total_maximo=12500)
+        self.config.write_text(json.dumps(cfg), encoding='utf-8')
         self.purchase = self.directory / 'compra.json'
         self.purchase.write_text(json.dumps({'categoria':'RAM', 'modelo':'DDR5 1x16GB',
             'total_centavos':150001,'pagamento':'cartao','parcelas':3,'primeira_parcela':'2026-12'}))
@@ -24,7 +28,7 @@ class CliTests(unittest.TestCase):
     def run_command(self, args):
         output = io.StringIO()
         with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
-            result = main(['--db', str(self.db)] + args)
+            result = main(['--db', str(self.db), '--config', str(self.config)] + args)
         return result, output.getvalue()
 
     def test_purchase_needs_explicit_confirmation(self):

@@ -78,16 +78,16 @@ def validate_purchase(purchase: dict[str, Any]) -> dict[str, Any]:
     if not item["categoria"] or not item["modelo"]:
         raise ValueError("Informe categoria e modelo da compra.")
     item["total_centavos"] = _whole(item.get("total_centavos"), "Total", 1)
-    if item.get("pagamento") not in {"pix", "cartao"}:
-        raise ValueError("Pagamento deve ser pix ou cartao.")
+    if item.get("pagamento") not in {"pix", "avista", "cartao"}:
+        raise ValueError("Pagamento deve ser pix, avista ou cartao.")
     item["parcelas"] = _whole(item.get("parcelas", 1), "Número de parcelas", 1)
     item["parcelas_pagas"] = _whole(item.get("parcelas_pagas", 0), "Parcelas pagas")
     installments(item["total_centavos"], item["parcelas"])
     if item["parcelas_pagas"] > item["parcelas"]:
         raise ValueError("Parcelas pagas excedem o número contratado.")
-    if item["pagamento"] == "pix":
+    if item["pagamento"] in {"pix", "avista"}:
         if item["parcelas"] != 1 or item["parcelas_pagas"]:
-            raise ValueError("Compra PIX não tem parcelas de cartão.")
+            raise ValueError("Compra à vista não tem parcelas de cartão.")
     else:
         _month(item.get("primeira_parcela", ""), 0)
     return item
@@ -103,14 +103,17 @@ def budget_snapshot(config: dict, purchases: list[dict], candidate: dict | None 
     if payment not in {"pix", "cartao"}:
         raise ValueError("Pagamento deve ser pix ou cartao.")
     limits = config.get("orcamento", {})
-    cash = cents(limits.get("pix", 10000))
+    cash_raw = limits.get("pix", 10000)
+    cash = None if cash_raw is None else cents(cash_raw)
     credit = cents(limits.get("cartao", 2500))
     # Total project ceiling, not a spending target. Paying a credit-card bill
     # restores the revolving limit but never increases this assembly budget.
-    total_cap = cents(limits["total_maximo"]) if "total_maximo" in limits else cash + credit
+    total_cap = cents(limits["total_maximo"]) if "total_maximo" in limits else (cash + credit if cash is not None else None)
     build = config.get("montagem", DEFAULT_BUILD)
     bought = [validate_purchase(p) for p in purchases]
-    spent = sum(p["total_centavos"] for p in bought if p["pagamento"] == "pix")
+    spent_pix = sum(p["total_centavos"] for p in bought if p["pagamento"] == "pix")
+    spent_other_cash = sum(p["total_centavos"] for p in bought if p["pagamento"] == "avista")
+    spent = spent_pix + spent_other_cash
     all_paid = sum(p["total_centavos"] for p in bought)
     outstanding = 0
     paid_card = 0
@@ -125,7 +128,7 @@ def budget_snapshot(config: dict, purchases: list[dict], candidate: dict | None 
             month = _month(p["primeira_parcela"], index)
             schedule[month] = schedule.get(month, 0) + pieces[index]
 
-    acquired = {p["categoria"] for p in bought}
+    acquired = {p["categoria"] for p in bought if not p.get("monitorar_novamente", False)}
     already_owned = {cat for cat, spec in build.items() if spec.get("possui", False)}
     acquired |= already_owned
     pending: list[str] = []
@@ -172,37 +175,46 @@ def budget_snapshot(config: dict, purchases: list[dict], candidate: dict | None 
                           "pagamento": method, "estimativa_centavos": value,
                           "oferta_candidata": False})
 
-    cash_after = cash - spent - extra_pix
+    cash_after = None if cash is None else cash - spent - extra_pix
     credit_after = credit - outstanding - extra_card
-    unknown = not all(known.values()) or bool(candidate and candidate_price is None)
+    unknown = cash is None or total_cap is None or not all(known.values()) or bool(candidate and candidate_price is None)
     lower_bound = all_paid + (candidate_price or 0) + sum(remainder.values())
-    limits_exceeded = cash_after < remainder["pix"] or credit_after < remainder["cartao"]
-    cap_exceeded = lower_bound > total_cap
+    limits_exceeded = (cash_after is not None and cash_after < remainder["pix"]) or credit_after < remainder["cartao"]
+    cap_exceeded = total_cap is not None and lower_bound > total_cap
     impossible = limits_exceeded or cap_exceeded
     viable = False if impossible or candidate_redundant else (None if unknown else True)
     if limits_exceeded:
         pending.append("A reserva PIX ou o limite de cartão não cobrem a montagem projetada.")
     if cap_exceeded:
         pending.append("Custo acumulado da montagem excede o teto total configurado; pagar parcelas não aumenta esse teto.")
+    if cash is None:
+        pending.append("Saldo disponível no PIX não informado; previsão de receitas não é dinheiro disponível.")
     if candidate and category not in build:
         viable = False
-    projected = None if unknown else lower_bound
+    projected = None if not all(known.values()) or (candidate and candidate_price is None) else lower_bound
     return {
         "pix_inicial_centavos": cash, "cartao_inicial_centavos": credit,
         "teto_total_centavos": total_cap,
-        "saldo_teto_centavos": total_cap - all_paid,
-        "saldo_teto_apos_centavos": None if candidate and candidate_price is None else total_cap - all_paid - (candidate_price or 0),
-        "folga_teto_centavos": None if unknown else total_cap - lower_bound,
+        "saldo_teto_centavos": None if total_cap is None else total_cap - all_paid,
+        "saldo_previsto_restante_centavos": None if limits.get('previsto_total') is None else cents(limits['previsto_total']) - all_paid,
+        "entradas_pendentes": limits.get('entradas_pendentes', []),
+        "entradas_confirmadas": limits.get('entradas_confirmadas', []),
+        "saldo_teto_apos_centavos": None if total_cap is None or (candidate and candidate_price is None) else total_cap - all_paid - (candidate_price or 0),
+        "folga_teto_centavos": None if total_cap is None or not all(known.values()) or (candidate and candidate_price is None) else total_cap - lower_bound,
         "total_minimo_projetado_centavos": lower_bound,
-        "gasto_pix_centavos": spent, "cartao_comprometido_centavos": outstanding,
-        "cartao_pago_centavos": paid_card, "total_comprado_centavos": all_paid,
-        "saldo_pix_centavos": cash - spent, "limite_cartao_centavos": credit - outstanding,
-        "saldo_pix_apos_centavos": None if candidate and payment == "pix" and candidate_price is None else cash_after,
+        "gasto_pix_centavos": spent_pix, "gasto_avista_sem_meio_centavos": spent_other_cash,
+        "total_pago_avista_centavos": spent, "cartao_comprometido_centavos": outstanding,
+        "cartao_pago_centavos": paid_card, "despesas_pagas_centavos": spent + paid_card,
+        "despesas_contratadas_centavos": all_paid, "total_comprado_centavos": all_paid,
+        "saldo_pix_centavos": None if cash is None or spent_other_cash else cash - spent,
+        "saldo_disponivel_avista_centavos": None if cash is None else cash - spent,
+        "limite_cartao_centavos": credit - outstanding,
+        "saldo_pix_apos_centavos": None if spent_other_cash or (candidate and payment == "pix" and candidate_price is None) else cash_after,
         "limite_cartao_apos_centavos": None if candidate and payment == "cartao" and candidate_price is None else credit_after,
         "restante_pix_centavos": remainder["pix"] if known["pix"] else None,
         "restante_cartao_centavos": remainder["cartao"] if known["cartao"] else None,
         "total_projetado_centavos": projected,
-        "folga_pix_centavos": cash_after - remainder["pix"] if known["pix"] and not (candidate and payment == "pix" and candidate_price is None) else None,
+        "folga_pix_centavos": cash_after - remainder["pix"] if not spent_other_cash and cash_after is not None and known["pix"] and not (candidate and payment == "pix" and candidate_price is None) else None,
         "folga_cartao_centavos": credit_after - remainder["cartao"] if known["cartao"] and not (candidate and payment == "cartao" and candidate_price is None) else None,
         "compromissos_mensais": dict(sorted(schedule.items())),
         "compras": bought, "faltantes": remaining, "ja_possui": sorted(acquired),
@@ -226,11 +238,16 @@ def _compatibility(offer: dict, config: dict, purchases: list[dict] | None = Non
     conflicts: list[str] = []
     selected = {cat: spec.get("modelo", "") for cat, spec in config.get("montagem", DEFAULT_BUILD).items()}
     for purchase in purchases or []:
-        selected[purchase.get("categoria", purchase.get("category"))] = purchase.get("modelo", "")
+        if not purchase.get('monitorar_novamente', False):
+            selected[purchase.get("categoria", purchase.get("category"))] = purchase.get("modelo", "")
     selected[category] = model
     parts = {cat: profiles.get(name, {}) for cat, name in selected.items()}
     cpu, board, ram = (parts.get(cat, {}) for cat in ("CPU", "PLACA-MAE", "RAM"))
     gpu, psu, cooler, case = (parts.get(cat, {}) for cat in ("GPU", "FONTE", "COOLER-CPU", "GABINETE"))
+    if category == 'GPU' and isinstance(offer.get('especificacoes'), dict):
+        # Explicit product dimensions and requirements in this announcement
+        # take precedence over a generic GPU family profile.
+        gpu = dict(gpu, **offer['especificacoes'])
 
     def label(value):
         return str(value).strip().upper() if value is not None else None
@@ -265,6 +282,8 @@ def _compatibility(offer: dict, config: dict, purchases: list[dict] | None = Non
     formats = case.get("formatos_placa_mae")
     if board.get("formato") and isinstance(formats, list) and label(board["formato"]) not in {label(f) for f in formats}:
         conflicts.append("Formato da placa-mãe não é suportado pelo gabinete selecionado.")
+    if case.get('formato_fonte') and psu.get('formato') and label(case['formato_fonte']) != label(psu['formato']):
+        conflicts.append('Formato da fonte não é suportado pelo gabinete selecionado.')
     for part, field, container, limit, message in (
         (gpu, "comprimento_mm", case, "gpu_max_mm", "Comprimento da GPU excede o espaço informado do gabinete."),
         (cooler, "altura_mm", case, "cooler_max_mm", "Altura do cooler excede o espaço informado do gabinete."),
@@ -281,6 +300,21 @@ def _compatibility(offer: dict, config: dict, purchases: list[dict] | None = Non
         warnings.append("Compatibilidade deste modelo ainda não cadastrada.")
     if checks.get(model) is not True:
         warnings.append("Confirmar BIOS, dimensões, conectores e compatibilidade da montagem nas especificações do fabricante.")
+    if category == 'GPU' and case.get('gpu_max_mm') and not gpu.get('comprimento_mm'):
+        warnings.append(f"Comprimento da GPU não informado; confirmar limite de {case['gpu_max_mm']} mm do gabinete.")
+    if category == 'GPU' and psu.get('conectores'):
+        required = gpu.get('conectores_requeridos')
+        if not isinstance(required, dict) or not required:
+            warnings.append('Conectores exigidos pela GPU não informados; confirmar com a fonte adquirida.')
+        else:
+            for kind, amount in required.items():
+                available = psu['conectores'].get(kind)
+                if available is False or (type(available) is int and type(amount) is int and available < amount):
+                    conflicts.append('A fonte não dispõe dos conectores exigidos pela GPU.')
+                elif available is None or (available is True and type(amount) is int and amount > 1):
+                    warnings.append('Quantidade de conectores PCIe da fonte precisa ser confirmada.')
+    if conflicts:
+        return False, list(dict.fromkeys(conflicts))
     return (None if warnings else True), warnings
 
 
@@ -346,11 +380,18 @@ def evaluate_offer(offer: dict, config: dict, purchases: list[dict]) -> dict:
     price = offer.get(f"{payment}_centavos")
     if price is not None:
         price = _whole(price, "Preço da oferta", 1)
-    budget = budget_snapshot(config, purchases, offer, payment)
+    freight = offer.get('frete_centavos') if model == 'Ryzen 7 7800X3D' and config.get('meta_7800x3d_inclui_frete') else None
+    if freight is not None:
+        freight = _whole(freight, 'Frete')
+    assessed = price + freight if price is not None and freight is not None else price
+    budget_offer = dict(offer)
+    if assessed is not None:
+        budget_offer[f'{payment}_centavos'] = assessed
+    budget = budget_snapshot(config, purchases, budget_offer, payment)
     compatible, compatibility_notes = _compatibility(offer, config, purchases)
     reason: list[str] = []
     verify = list(offer.get("verificar") or [])
-    delta = price - target if price is not None and target is not None else None
+    delta = assessed - target if assessed is not None and target is not None else None
     percent = round(float(Decimal(delta) * 100 / target), 2) if delta is not None else None
     classification = "VERIFICAR"
     if category not in build or category in budget["ja_possui"]:
@@ -366,12 +407,12 @@ def evaluate_offer(offer: dict, config: dict, purchases: list[dict]) -> dict:
         reason.append("Preço final por forma de pagamento não identificado; confirmar anúncio.")
     elif target is None:
         reason.append("Meta deste modelo ainda não cadastrada.")
-    elif Decimal(price) * 100 > Decimal(target) * (100 - good):
+    elif Decimal(assessed) * 100 > Decimal(target) * (100 - good):
         classification = "NÃO COMPENSA"
         reason.append("Preço não atende ao desconto configurado para este modelo.")
     elif verify:
         reason.append("Extração ou condições da oferta precisam de verificação.")
-    elif Decimal(price) * 100 <= Decimal(target) * (100 - exceptional) and compatible is True and budget["conclusao_viavel"] is True:
+    elif Decimal(assessed) * 100 <= Decimal(target) * (100 - exceptional) and compatible is True and budget["conclusao_viavel"] is True:
         classification = "COMPRAR AGORA"
         reason.append("Desconto excepcional frente à meta, compatibilidade confirmada e montagem estimada dentro dos limites.")
     else:
@@ -383,6 +424,10 @@ def evaluate_offer(offer: dict, config: dict, purchases: list[dict]) -> dict:
         reason.append("Não é possível garantir a conclusão: há custos ainda desconhecidos.")
     if payment != preferred:
         reason.append(f"Avaliado no {payment}; preferência configurada é {preferred}.")
+    if model == 'Ryzen 7 7800X3D' and config.get('meta_7800x3d_inclui_frete') and offer.get('frete_centavos') is None:
+        reason.append('Meta de R$ 1.750 inclui frete; confirme o total entregue.')
+        if classification == 'COMPRAR AGORA':
+            classification = 'BOA PROMOÇÃO'
     reason.extend(str(item) for item in verify)
     # The target is a planning reference, not a guarantee of quality. Generic
     # candidates remain for manual evaluation and can never be "COMPRAR AGORA".
@@ -390,17 +435,21 @@ def evaluate_offer(offer: dict, config: dict, purchases: list[dict]) -> dict:
     categories = {'PLACA-MAE', 'RAM', 'FONTE', 'COOLER-CPU', 'GABINETE'}
     generic_only = all(item == 'Modelo exato não identificado; verificar especificações e compatibilidade' for item in verify)
     margin = Decimal(str(discovery.get('margem_percentual', 25)))
+    resumed = any(p.get('categoria') == category and p.get('monitorar_novamente', False) for p in purchases)
     if (discovery.get('ativado', False) and category in categories and not offer.get('modelo_exato', False)
             and category in build and category not in budget['ja_possui'] and compatible is not False
-            and budget['conclusao_viavel'] is True and price is not None and target is not None
+            and (budget['conclusao_viavel'] is True or (config.get('alertar_orcamento_incerto') and (category in {'PLACA-MAE', 'RAM'} or resumed)))
+            and price is not None and target is not None
             and generic_only and margin.is_finite() and 0 <= margin <= 100
             and Decimal(price) * 100 <= Decimal(target) * (100 + margin)):
         classification = 'AVALIAR ALTERNATIVA'
         reason = ['Alternativa dentro da margem de triagem; modelo, qualidade e compatibilidade precisam de verificação.'] + compatibility_notes
+        if budget['conclusao_viavel'] is not True:
+            reason.append('Orçamento ainda não confirmado; confira recursos disponíveis e custo total da montagem.')
         if payment != preferred:
             reason.append(f'Avaliado no {payment}; preferência configurada é {preferred}.')
     return {"classificacao": classification, "justificativa": reason,
-            "pagamento": payment, "preco_centavos": price, "meta_centavos": target,
+            "pagamento": payment, "preco_centavos": price, "total_entregue_centavos": assessed if freight is not None else None, "meta_centavos": target,
             "diferenca_centavos": delta, "diferenca_percentual": percent,
             "orcamento": budget, "compativel": compatible,
             "compatibilidade": compatibility_notes, "comparacao": _comparison(offer, config, price)}

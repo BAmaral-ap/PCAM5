@@ -59,7 +59,7 @@ def _event(previous, current, target, reduction):
     return None
 
 
-def _message(item, current, previous, event, observed, hint, cfg):
+def _message(item, current, previous, event, observed, hint, cfg, purchases=()):
     fields = [('Preço público', 'preco_publico_centavos'), ('Preço PIX', 'preco_pix_centavos'),
               ('Preço cartão', 'preco_cartao_centavos')]
     lines = [f"🔥 LOJA — {event}", f"Produto: {item['nome']}", f"Loja: {item['loja']}"]
@@ -88,6 +88,23 @@ def _message(item, current, previous, event, observed, hint, cfg):
     known = [v for v in _price_fields(current).values() if v is not None]
     if known and item.get('familia') == 'RX 9070 XT':
         lines.append('Faixa preliminar: ' + tier(min(known), cfg))
+        profiles = cfg.get('perfis', {})
+        bought = {p.get('categoria'): profiles.get(p.get('modelo'), {}) for p in purchases
+                  if not p.get('monitorar_novamente', False)}
+        case, psu = bought.get('GABINETE', {}), bought.get('FONTE', {})
+        references = []
+        if case.get('gpu_max_mm'):
+            references.append(f"gabinete até {case['gpu_max_mm']} mm")
+        if psu.get('potencia_w'):
+            references.append(f"fonte {psu['potencia_w']} W")
+        if references:
+            from finance import _compatibility
+            model = item['nome'] if item['nome'] in profiles else cfg.get('montagem', {}).get('GPU', {}).get('modelo', '')
+            compatible, notes = _compatibility({'categoria': 'GPU', 'peca': model, 'modelo_exato': True}, cfg, list(purchases))
+            status = 'INCOMPATIBILIDADE A VERIFICAR' if compatible is False else 'compatibilidade a confirmar'
+            lines.append(f"Compatibilidade: {status} ({', '.join(references)}); confira dimensões, potência e conectores.")
+            if compatible is False:
+                lines.extend(notes)
     lines += [f"Verificado em: {observed}", 'Fonte: dados públicos estruturados da página; confira preço, frete, cupom, vendedor e estoque no checkout.', item['url']]
     return '\n'.join(lines)
 
@@ -209,7 +226,7 @@ class StoreTracking:
             sent = self.db.execute('SELECT state FROM notifications WHERE dedupe_key=?', (row['telegram_key'],)).fetchone()
             if sent and sent['state'] == 'sent':
                 event = None
-        payload = _message(item, current, previous_for_comparison, event, _local(now), hint, cfg) if event else None
+        payload = _message(item, current, previous_for_comparison, event, _local(now), hint, cfg, self.store.purchases()) if event else None
         if current['status'] != 'produto_esgotado':
             known_prices.update({k: v for k, v in _price_fields(current).items() if v is not None})
         # State, observation and notification are committed atomically.

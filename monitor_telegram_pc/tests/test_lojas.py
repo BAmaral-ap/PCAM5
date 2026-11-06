@@ -345,6 +345,13 @@ class SchedulerTests(unittest.IsolatedAsyncioTestCase):
         monitor=self.make(fetch);await monitor.check_due()
         self.assertEqual(self.store.pending_notifications(),[])
         self.assertEqual(monitor.tracking.status([ITEM])[0]['ultima_observacao']['preco_publico_centavos'],500000)
+    async def test_reactivated_category_can_alert_again(self):
+        def fetch(url):
+            return Response(200,ROBOTS,'text/plain') if url.endswith('/robots.txt') else Response(200,html('5000'),'text/html')
+        self.store.add_purchase({'categoria':'GPU','modelo':'RX 9070 XT','total_centavos':500000,
+                                 'pagamento':'pix','parcelas':1,'parcelas_pagas':0,'monitorar_novamente':True})
+        monitor=self.make(fetch);await monitor.check_due()
+        self.assertEqual(len(self.store.pending_notifications()),1)
     async def test_shop_alert_does_not_wait_for_gemini(self):
         from runtime import deliver_pending
         class Bot:

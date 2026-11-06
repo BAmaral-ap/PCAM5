@@ -146,9 +146,9 @@ Inicialmente, `excepcional_percentual: 10` exige 10% ou mais abaixo da meta; `bo
 - **BOA PROMOÇÃO:** preço interessante; confira eventuais pendências de compatibilidade e custos desconhecidos antes de decidir.
 - **NÃO COMPENSA:** preço fora do critério, incompatibilidade, peça já comprada/fora da montagem ou comprometimento do orçamento.
 - **VERIFICAR:** preço, pagamento, meta ou extração ambíguos; não há certeza suficiente para recomendar.
-- **AVALIAR ALTERNATIVA:** anúncio de placa-mãe, RAM, fonte, cooler de CPU ou gabinete sem modelo cadastrado, com preço conhecido e triagem financeira favorável. Confira modelo, qualidade e compatibilidade; a etiqueta não comprova que o produto seja bom.
+- **AVALIAR ALTERNATIVA:** anúncio sem modelo cadastrado dentro da margem de triagem. Confira modelo, qualidade, compatibilidade e orçamento; a etiqueta não comprova que o produto seja bom.
 
-As duas primeiras classes e `AVALIAR ALTERNATIVA` notificam por padrão. A triagem ampliada aceita até 25% acima da meta da peça de referência quando a projeção total cabe nos limites; ajuste `alternativas_gerais.margem_percentual` ou desative `alternativas_gerais.ativado` em `config.json`. Preços ou condições ambíguos não entram nessa triagem. Acrescente `"VERIFICAR"` a `alertas.classes` para receber outras revisões. Ventoinhas não fazem parte dessa ampliação. Ofertas rejeitadas permanecem no banco.
+As duas primeiras classes e `AVALIAR ALTERNATIVA` notificam por padrão. A triagem ampliada aceita até 25% acima da meta da peça de referência; ajuste `alternativas_gerais.margem_percentual` ou desative `alternativas_gerais.ativado` em `config.json`. Com orçamento pendente, CPU, placa-mãe e RAM ainda podem gerar alerta provisório pedindo verificação do orçamento. Preços ou condições ambíguos não entram na triagem de alternativas. Ventoinhas não fazem parte dessa ampliação. Ofertas rejeitadas permanecem no banco.
 
 ### Compatibilidade e alternativas
 
@@ -168,8 +168,8 @@ Esse exemplo é uma confirmação manual. Não marque todos os modelos sem confe
 |---|---|
 | CPU / placa-mãe | `socket` (ex.: `AM5`) |
 | RAM / placa-mãe | `tipo_memoria` (ex.: `DDR5`) |
-| GPU | `comprimento_mm`, `fonte_minima_w` |
-| Fonte | `potencia_w` |
+| GPU | `comprimento_mm`, `fonte_minima_w`, `conectores_requeridos` |
+| Fonte | `potencia_w`, `formato`, `conectores` |
 | Cooler | `altura_mm`, `sockets` (lista de sockets suportados) |
 | Placa-mãe | `formato` |
 | Gabinete | `gpu_max_mm`, `cooler_max_mm`, `formatos_placa_mae` (lista) |
@@ -196,9 +196,30 @@ A identidade específica prevalece sobre a família genérica. Complete `perfis`
 
 O relatório separa reserva PIX, crédito, compras, parcelas por mês, peças faltantes e total projetado. Crédito não é dinheiro recebido nem aumenta o saldo PIX.
 
-O plano inicial disponibiliza **R$ 10.000 no PIX** e **R$ 2.500 no cartão**. As metas das peças PIX somam **R$ 8.020**, com **estimativa de R$ 1.500 no cartão para RAM**, total **R$ 9.520**. O SSD consta como já possuído. O valor no cartão é uma hipótese explícita de planejamento, não preço parcelado confirmado nem conversão automática do PIX. Ajuste-o à oferta real ou use `null` quando desconhecido; custos faltantes impedem garantir a conclusão.
+O orçamento **previsto** é de R$ 9.450,00, condicionado às entradas planejadas e incluindo R$ 5.000 ainda pendentes pelo site. Não representa dinheiro disponível agora; o saldo disponível no PIX aparece como `null` até ser informado. O limite de cartão não é receita. A RAM permanece prevista no cartão e seu custo entra no total da montagem.
 
-`orcamento.total_maximo` é o teto total da montagem, inicialmente R$ 12.500, além dos limites separados. Não é meta de gasto. Parcelas já pagas continuam consumindo esse teto: liberar crédito não cria orçamento adicional. Inclua frete, juros e acessórios nas estimativas e no total confirmado da compra. A RAM prefere cartão, mas uma oferta excepcional no PIX pode ser avaliada se ainda permitir concluir a montagem.
+As compras confirmadas somam R$ 927,98; o saldo previsto restante é R$ 8.522,02. As estimativas atuais das quatro peças faltantes, somadas às compras, dão R$ 9.957,98, acima da previsão em R$ 507,98, antes de fretes não informados. São referências, não preços finais garantidos. A meta de R$ 1.750 para o 7800X3D inclui frete; se ele não estiver disponível, o alerta pede confirmação do total entregue.
+
+`orcamento.total_maximo` é a referência total da montagem, não dinheiro disponível. Parcelas já pagas continuam consumindo esse teto: liberar crédito não cria orçamento adicional. Inclua frete, juros e acessórios nas estimativas e no total confirmado da compra. Se souber o saldo inicial reservado para a montagem, informe `orcamento.pix` com atenção às compras já registradas.
+
+### Aplicar as compras confirmadas de novembro/2026
+
+Pare o monitor e, no computador com o banco existente, execute:
+
+```powershell
+.\.venv\Scripts\python.exe monitor.py --atualizar-montagem --confirmar
+.\.venv\Scripts\python.exe monitor.py --budget
+```
+
+O comando registra cooler ARCTIC Freezer 36 (R$ 215,81), Montech XR White (R$ 317,12) e Pichau Cluster 850W (R$ 395,05). Ele reconhece o cooler antigo, não duplica os registros e interrompe sem mudar as compras se encontrar conflito de valor ou pagamento. A fonte fica paga e comprada, com entrega em preparação. O gabinete é registrado como `avista` porque a forma específica não foi informada. O comando preserva os canais e demais configurações existentes; uma repetição não desfaz alterações posteriores.
+
+Fonte, gabinete e coolers deixam de gerar alertas de compra, enquanto GPU, CPU, placa-mãe e RAM continuam. Para reativar uma categoria sem apagar o histórico nem presumir estorno, pare o monitor e use, por exemplo:
+
+```powershell
+.\.venv\Scripts\python.exe monitor.py --reativar-categoria FONTE --confirmar
+```
+
+As demais opções são `GABINETE` e `COOLER-CPU`. A reativação adiciona novamente a estimativa da categoria às peças faltantes e mantém o gasto anterior. O gabinete oferece 420 mm para GPU e 175 mm para cooler; o ARCTIC tem 159 mm. A fonte é de 850 W. Dimensões específicas da GPU, potência recomendada e quantidade dos conectores ainda precisam ser confirmadas por modelo.
 
 ### Registrar uma compra que você já fez
 
@@ -225,7 +246,7 @@ O registro exige JSON e `--confirmar`. Exemplo ilustrativo de RAM comprada por R
 
 Substitua os dados do exemplo antes de confirmar. Use o total efetivamente contratado, incluindo custos que deseja atribuir à peça. O comando apenas registra uma decisão local. A peça deixa de faltar e seu valor real substitui a estimativa; guarde o ID retornado. O comando evita duplicar um registro idêntico. Uma segunda compra na mesma categoria não representa uma nova necessidade prevista; revise seu planejamento antes de ampliar a montagem.
 
-Para PIX, use `"pagamento": "pix"`, `"parcelas": 1`, `"parcelas_pagas": 0`; a primeira parcela é dispensável. Categorias: `CPU`, `GPU`, `PLACA-MAE`, `RAM`, `FONTE`, `COOLER-CPU`, `GABINETE`, `SSD`.
+Para PIX, use `"pagamento": "pix"`, `"parcelas": 1`, `"parcelas_pagas": 0`; a primeira parcela é dispensável. Use `"avista"` quando a forma específica do pagamento à vista não for conhecida. Categorias: `CPU`, `GPU`, `PLACA-MAE`, `RAM`, `FONTE`, `COOLER-CPU`, `GABINETE`, `SSD`.
 
 Depois de pagar uma parcela da compra de ID 1:
 

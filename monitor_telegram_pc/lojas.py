@@ -171,7 +171,7 @@ class ShopMonitor:
                 threshold = self.catalog.get('queda_minima_percentual', 5)
                 if type(threshold) is not int or not 1 <= threshold <= 100:
                     raise ValueError('queda_minima_percentual deve estar entre 1 e 100')
-                bought = {p.get('categoria') for p in self.tracking.store.purchases()}
+                bought = {p.get('categoria') for p in self.tracking.store.purchases() if not p.get('monitorar_novamente', False)}
                 owned = self.config.get('montagem', {}).get(item['categoria'], {}).get('possui', False)
                 can_notify = self.notifications_enabled and item['categoria'] not in bought and not owned
                 event = self.tracking.success(item, self.now(), observation, self.config,
