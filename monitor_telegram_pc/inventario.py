@@ -50,6 +50,7 @@ def updated_config(config):
     if confirmed:
         limits['entradas_confirmadas'] = confirmed
     metas = cfg.setdefault('metas', {})
+    metas.setdefault('DDR5 2x16GB', 2400)
     if previous_update not in {OLD_UPDATE_ID, UPDATE_ID}:
         metas['Ryzen 7 7800X3D'] = 1750
     metas['SSD NVMe'] = 700
@@ -161,7 +162,9 @@ def _refresh_pending(store, cfg=None):
             lines = payload.splitlines()
             if lines:
                 lines[0] = '🔥 LOJA — RAM — VERIFICAR PREÇO E PARCELAMENTO'
-                lines.insert(1, '⚠️ Parcelamento sem juros ainda não confirmado. Confirme o total no cartão e 1×16 GB.')
+                kit = re.search(r'\b2\s*[x×]\s*16\s*gb\b', shop_match['nome'], re.I)
+                desired = '2×16 GB' if kit else '1×16 GB'
+                lines.insert(1, f'⚠️ Parcelamento sem juros ainda não confirmado. Confirme o total no cartão e {desired}.')
                 db.execute("UPDATE notifications SET payload=?,updated_at=? WHERE id=? AND state='pending'",
                            ('\n'.join(lines), datetime.now(timezone.utc).isoformat(), row['id']))
                 continue

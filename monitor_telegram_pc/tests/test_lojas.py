@@ -372,6 +372,29 @@ class SchedulerTests(unittest.IsolatedAsyncioTestCase):
         await monitor.check_due()
         self.assertEqual(len(self.store.pending_notifications()), 1)
         self.assertIn('Meta: R$ 700,00', self.store.pending_notifications()[0]['payload'])
+    async def test_ram_kit_respects_cap_and_warns_when_card_plan_unknown(self):
+        ram = deepcopy(ITEM)
+        ram.update(id='test-ram-kit', nome='Corsair DDR5 32GB (2x16GB)', categoria='RAM', familia='DDR5',
+                   termos_identificacao=['Corsair', 'DDR5', '2x16GB'], meta_centavos=300000)
+        price = ['2450']
+        def fetch(url):
+            if url.endswith('/robots.txt'):
+                return Response(200, ROBOTS, 'text/plain')
+            return Response(200, html(price[0], product_name=ram['nome']), 'text/html')
+        catalog = {'lojas': {'kabum': {'termos_verificados': True}}, 'produtos': [ram]}
+        monitor = ShopMonitor(self.store, catalog, [ram], {}, fetch=fetch, now=self.clock.now,
+                              sleep=self.clock.sleep, jitter=lambda:0)
+        await monitor.check_due()
+        self.assertEqual(self.store.pending_notifications(), [])
+        self.assertEqual(len(monitor.tracking.history(ram)), 1)
+        price[0] = '2333'
+        self.clock.t += 180
+        await monitor.check_due()
+        self.assertEqual(len(self.store.pending_notifications()), 1)
+        payload = self.store.pending_notifications()[0]['payload']
+        self.assertIn('Meta: R$ 2.400,00', payload)
+        self.assertIn('2×16 GB', payload)
+        self.assertIn('Parcelamento sem juros ainda não confirmado', payload)
     async def test_shop_alert_does_not_wait_for_gemini(self):
         from runtime import deliver_pending
         class Bot:

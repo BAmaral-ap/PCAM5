@@ -363,6 +363,9 @@ def evaluate_offer(offer: dict, config: dict, purchases: list[dict]) -> dict:
     """Recomendação conservadora; não valida estoque, cupom ou checkout."""
     model = offer.get("peca", "")
     category = offer.get("categoria")
+    specs = offer.get('especificacoes') or {}
+    kit = category == 'RAM' and (model == 'DDR5 2x16GB' or
+        isinstance(specs, dict) and specs.get('modulos') == 2 and specs.get('capacidade_por_modulo_gb') == 16)
     build = config.get("montagem", DEFAULT_BUILD)
     preferred = 'cartao' if category == 'RAM' else build.get(category, {}).get("pagamento", "pix")
     if preferred not in {"pix", "cartao"}:
@@ -370,11 +373,15 @@ def evaluate_offer(offer: dict, config: dict, purchases: list[dict]) -> dict:
     target_raw = config.get("metas", {}).get(model, offer.get("meta"))
     if not offer.get('modelo_exato', False) and category in {'PLACA-MAE', 'RAM', 'FONTE', 'COOLER-CPU', 'GABINETE', 'SSD'}:
         reference = build.get(category, {}).get('modelo')
-        if category == 'SSD':
-            target_raw = config.get('metas', {}).get(model, config.get('metas', {}).get(reference, target_raw))
+        if category == 'SSD' or kit:
+            default = 2400 if category == 'RAM' else config.get('metas', {}).get(reference, target_raw)
+            target_raw = config.get('metas', {}).get(model, default)
         else:
             target_raw = config.get('metas', {}).get(reference, target_raw)
     target = cents(target_raw) if target_raw is not None else None
+    if kit:
+        maximum = cents(config.get('metas', {}).get('DDR5 2x16GB', 2400))
+        target = min(target, maximum) if target is not None else maximum
     if category == 'SSD' and config.get('metas', {}).get('SSD NVMe') is not None:
         maximum = cents(config['metas']['SSD NVMe'])
         target = min(target, maximum) if target is not None else maximum
@@ -480,9 +487,12 @@ def evaluate_offer(offer: dict, config: dict, purchases: list[dict]) -> dict:
         elif interest is not True:
             classification = 'VERIFICAR PARCELAMENTO'
             reason.insert(0, '⚠️ Parcelamento sem juros ainda não confirmado.')
-        elif price is None or type(count) is not int or count < 2:
+        elif price is None:
+            classification = 'VERIFICAR PREÇO NO CARTÃO'
+            reason.insert(0, 'Parcelamento sem juros identificado; confirme o preço total no cartão.')
+        elif type(count) is not int or count < 2:
             classification = 'VERIFICAR PARCELAMENTO'
-            reason.insert(0, 'Parcelamento sem juros anunciado; confirme o preço total e o número de parcelas no cartão.')
+            reason.insert(0, 'Parcelamento sem juros identificado; confirme o número de parcelas no cartão.')
         if payment == 'cartao':
             reason.append('RAM: parcelas pagas com renda pessoal separada da reserva à vista.')
     return {"classificacao": classification, "justificativa": reason,

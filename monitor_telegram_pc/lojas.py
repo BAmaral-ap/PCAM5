@@ -178,8 +178,19 @@ class ShopMonitor:
                 if item['categoria'] == 'RAM':
                     title = item['nome']
                     kit = re.search(r'\b(\d+)\s*[x×]\s*(\d+)\s*gb\b', title, re.I)
-                    if re.search(r'\b(?:so[ -]?dimm|notebook)\b', title, re.I) or (kit and (int(kit[1]), int(kit[2])) != (1, 16)):
+                    shape = (int(kit[1]), int(kit[2])) if kit else None
+                    if (re.search(r'\b(?:so[ -]?dimm|notebook)\b', title, re.I)
+                            or (shape and shape not in {(1, 16), (2, 16)})
+                            or (shape is None and re.search(r'\b32\s*gb\b', title, re.I))):
                         can_notify = False
+                    if shape == (2, 16):
+                        from finance import cents
+                        cap = cents(self.config.get('metas', {}).get('DDR5 2x16GB', 2400))
+                        target_item = dict(item, meta_centavos=min(item['meta_centavos'], cap))
+                        values = [observation.get(field) for field in ('preco_publico_centavos', 'preco_sem_cupom_centavos',
+                                                                        'preco_pix_centavos', 'preco_cartao_centavos')]
+                        if not any(type(value) is int and 0 < value <= cap for value in values):
+                            can_notify = False
                 if item['categoria'] == 'SSD' and self.config.get('metas', {}).get('SSD NVMe') is not None:
                     from finance import cents
                     cap = cents(self.config['metas']['SSD NVMe'])

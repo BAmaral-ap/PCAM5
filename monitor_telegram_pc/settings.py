@@ -10,6 +10,7 @@ HERE = Path(__file__).resolve().parent
 def load_config(path: Path | str | None = None) -> dict:
     from parsing import normalize_channel
     cfg = json.loads(Path(path or HERE / 'config.json').read_text(encoding='utf-8'))
+    cfg.setdefault('metas', {}).setdefault('DDR5 2x16GB', 2400)
     channels = cfg.get('canais', [])
     if not isinstance(channels, list) or not channels:
         raise ValueError('Configure pelo menos um canal público em canais.')

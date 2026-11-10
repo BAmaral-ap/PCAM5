@@ -80,14 +80,14 @@ class OffersTests(unittest.TestCase):
         self.assertIs(offer['parcelamento_sem_juros'], True)
         self.assertIsNone(offer['total_parcelado_sem_juros_centavos'])
         evaluation = evaluate_offer(offer, self.cfg, self.store.purchases())
-        self.assertEqual(evaluation['classificacao'], 'VERIFICAR PARCELAMENTO')
+        self.assertEqual(evaluation['classificacao'], 'VERIFICAR PREÇO NO CARTÃO')
         self.assertIsNone(evaluation['preco_centavos'])
         self.assertTrue(alerts)
-        self.assertIn('confirme o preço total e o número de parcelas', alerts[0]['payload'])
+        self.assertIn('confirme o preço total no cartão', alerts[0]['payload'])
 
     def test_ram_unknown_installment_is_provisional_and_pix_is_not_card_price(self):
         for suffix in ('R$ 1.000 no PIX', 'R$ 1.200 no cartão', 'R$ 1.200',
-                       '10x de R$ 120 no cartão', 'R$ 1.200 em 10x sem juros'):
+                       '10x de R$ 120 no cartão'):
             with self.subTest(suffix=suffix):
                 offer, alerts = self.alerts('DDR5 16GB\n' + suffix)
                 self.assertEqual(len(alerts), 1)
@@ -118,7 +118,7 @@ class OffersTests(unittest.TestCase):
                 self.assertIn('⚠️ Parcelamento sem juros ainda não confirmado.', alerts[0]['payload'])
 
     def test_no_recommendations_of_other_capacity_or_notebook_modules(self):
-        for title in ('DDR5 2x8GB', 'DDR5 2x16GB', 'DDR5 32GB', 'DDR5 SODIMM 16GB notebook'):
+        for title in ('DDR5 2x8GB', 'DDR5 32GB', 'DDR5 SODIMM 16GB notebook'):
             with self.subTest(title=title):
                 _, alerts = self.alerts(title + '\nR$ 1.200 no cartão')
                 self.assertEqual(alerts, [])
@@ -320,6 +320,20 @@ class GeminiPolicyTests(unittest.IsolatedAsyncioTestCase):
         now = datetime.now(timezone.utc)
         with tempfile.TemporaryDirectory() as directory, Store(Path(directory) / 'state.db') as store:
             store.enqueue_notification('ram', 'VERIFICAR PARCELAMENTO\nRAM desejada: 1×16 GB; confirme o módulo.', now)
+            bot = FakeBot()
+            with patch.dict('os.environ', {'GEMINI_API_KEY':'fake'}), patch('gemini.explain') as explain:
+                await deliver_pending(store, bot, 30, {'ativado':True, 'limite_diario':20})
+            explain.assert_not_called()
+            self.assertEqual(len(bot.sent), 1)
+
+    async def test_ram_kit_also_skips_ai_payment_suggestions(self):
+        class FakeBot:
+            def __init__(self): self.sent = []
+            def verify_private(self): pass
+            def send(self, text): self.sent.append(text)
+        now = datetime.now(timezone.utc)
+        with tempfile.TemporaryDirectory() as directory, Store(Path(directory) / 'state.db') as store:
+            store.enqueue_notification('ramkit', 'KIT\nRAM desejada: 2×16 GB (32 GB); confira.', now)
             bot = FakeBot()
             with patch.dict('os.environ', {'GEMINI_API_KEY':'fake'}), patch('gemini.explain') as explain:
                 await deliver_pending(store, bot, 30, {'ativado':True, 'limite_diario':20})

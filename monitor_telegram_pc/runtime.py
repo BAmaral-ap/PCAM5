@@ -123,13 +123,36 @@ def make_notifications(store, offer, cfg, purchases, now):
                 or offer.get('parcelamento_sem_juros') is False
                 or re.search(r'\b(?:so[ -]?dimm|notebook)\b', title, re.I)):
             return []
-        shape = re.fullmatch(r'DDR5\s+(\d+)x(\d+)GB', offer.get('peca', ''), re.I)
-        if shape and (int(shape[1]), int(shape[2])) != (1, 16):
+        matched_shape = re.fullmatch(r'DDR5\s+(\d+)x(\d+)GB', offer.get('peca', ''), re.I)
+        specs = offer.get('especificacoes') or {}
+        shape = (int(matched_shape[1]), int(matched_shape[2])) if matched_shape else None
+        if shape is None and isinstance(specs, dict) and type(specs.get('modulos')) is int and type(specs.get('capacidade_por_modulo_gb')) is int:
+            shape = (specs['modulos'], specs['capacidade_por_modulo_gb'])
+        if shape and shape not in {(1, 16), (2, 16)}:
             return []
         price = (offer.get('total_parcelado_sem_juros_centavos') or offer.get('cartao_centavos')
                  or offer.get('anunciado_centavos') or offer.get('pix_centavos'))
         if type(price) is not int or price <= 0 or 'Preço fora da faixa plausível; verificar erro ou produto diferente' in offer.get('verificar', []):
             return []
+        if shape == (2, 16):
+            target = evaluation.get('meta_centavos')
+            if type(target) is not int or target <= 0:
+                return []
+            installment_total = offer.get('total_parcelado_sem_juros_centavos')
+            if type(installment_total) is int:
+                if installment_total > target:
+                    return []
+            else:
+                card_price = offer.get('cartao_centavos')
+                candidates = (card_price, offer.get('anunciado_centavos')) if type(card_price) is int else (
+                    offer.get('anunciado_centavos'), offer.get('pix_centavos'))
+                if not any(type(candidate) is int and 0 < candidate <= target for candidate in candidates):
+                    return []
+                announced = offer.get('anunciado_centavos')
+                if (offer.get('parcelamento_sem_juros') is True and type(announced) is int
+                        and 0 < announced <= target):
+                    evaluation = dict(evaluation, classificacao='🔥 KIT DDR5 2×16 GB — VERIFICAR PREÇO',
+                        justificativa=['Preço anunciado dentro da meta; confirme o total parcelado no cartão.'] + evaluation['justificativa'])
         if evaluation['classificacao'] == 'NÃO COMPENSA':
             evaluation = dict(evaluation, classificacao='AVALIAR PREÇO E ORÇAMENTO',
                               justificativa=['Confira o preço total parcelado, o orçamento e a compatibilidade.'] + evaluation['justificativa'])
@@ -200,6 +223,12 @@ def make_notifications(store, offer, cfg, purchases, now):
             return []
         meta = round(float(cfg.get('metas', {}).get('RX 9070 XT 16GB', 5100)) * 100)
         link = offer.get('link_loja') or offer['link']
+        installment = ''
+        if offer.get('parcelamento_sem_juros') is True:
+            count = offer.get('parcelas')
+            plan = f'{count}x sem juros' if type(count) is int else 'Parcelamento sem juros'
+            qualifier = 'identificado como cartão' if offer.get('parcelamento_cartao_inferido') else 'no cartão anunciado'
+            installment = f'{plan}: {qualifier}; confirme o total no checkout.\n'
         compatibility = ''
         profiles = cfg.get('perfis', {})
         owned = {p.get('categoria'): profiles.get(p.get('modelo'), {}) for p in purchases
@@ -221,6 +250,7 @@ def make_notifications(store, offer, cfg, purchases, now):
                    f"Modelo anunciado: {offer.get('nome_completo') or offer['peca']}\n"
                    f"Preço anunciado: {money(value)}\n"
                    f"Pagamento e frete: confirme no checkout\n"
+                   f"{installment}"
                    f"Loja: {offer.get('loja') or 'não informada'}\n"
                    f"Cupom: {offer.get('cupom') or 'não informado'}\n"
                    f"Origem: @{offer['canal']}\nMeta: {money(meta)}\n"
@@ -370,7 +400,7 @@ async def deliver_pending(store, notifier, max_age_minutes=30, gemini_config=Non
         limit = settings.get('limite_diario', 20)
         day_key = 'gemini_calls:' + utcnow().date().isoformat()
         used = store.get_meta(day_key, 0)
-        is_ram = '\nRAM desejada: 1×16 GB;' in payload
+        is_ram = '\nRAM desejada:' in payload
         if not is_ram and not payload.startswith(('🔥 RX 9070 XT', '🔥 LOJA —')) and settings.get('ativado') and key and isinstance(limit, int) and 0 < limit <= 1000 and used < limit:
             # Count attempts before the request, including failures and restarts.
             store.set_meta(day_key, used + 1)

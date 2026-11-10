@@ -80,6 +80,8 @@ def format_alert(offer, evaluation):
     if isinstance(reasons, str):
         reasons = [reasons]
     specs = offer.get('especificacoes') or {}
+    if not isinstance(specs, dict):
+        specs = {}
     speed = specs.get('velocidade_memoria', specs.get('frequencia_mhz')) if offer.get('categoria') == 'RAM' and isinstance(specs, dict) else None
     memory_note = []
     if type(speed) is int:
@@ -88,7 +90,12 @@ def format_alert(offer, evaluation):
         memory_note = [f'RAM: {speed} {unit} ({preference}; referência 5600–6000 MT/s)']
     if offer.get('categoria') == 'RAM':
         if offer.get('parcelamento_sem_juros') is True:
-            memory_note.append('Parcelamento sem juros anunciado no cartão; confirme preço e condições no checkout.')
+            if offer.get('parcelamento_cartao_inferido'):
+                count = offer.get('parcelas')
+                plan = f'{count}x sem juros' if type(count) is int else 'Parcelamento sem juros'
+                memory_note.append(f'{plan}: identificado como cartão; confirme preço e condições no checkout.')
+            else:
+                memory_note.append('Parcelamento sem juros anunciado no cartão; confirme preço e condições no checkout.')
         else:
             memory_note.append('⚠️ Parcelamento sem juros ainda não confirmado.')
         pix, card = offer.get('pix_centavos'), offer.get('total_parcelado_sem_juros_centavos')
@@ -96,8 +103,18 @@ def format_alert(offer, evaluation):
             memory_note.append(f'Total parcelado sem juros anunciado: {money(card)}')
         if type(pix) is int and type(card) is int:
             memory_note.append(f'Diferença do total no cartão em relação ao PIX: {money(card - pix)}')
-        memory_note.append('RAM desejada: 1×16 GB; confirme o módulo e a compatibilidade antes da compra.')
-        memory_note.append('Confira fabricante, garantia e possibilidade de adicionar outro módulo compatível depois.')
+        is_kit = offer.get('peca') == 'DDR5 2x16GB' or (specs.get('modulos') == 2 and specs.get('capacidade_por_modulo_gb') == 16)
+        if is_kit:
+            memory_note.append('RAM desejada: 2×16 GB (32 GB); confirme os módulos e a compatibilidade.')
+            memory_note.append('Confira fabricante, garantia, perfis de memória e compatibilidade AM5.')
+        else:
+            memory_note.append('RAM desejada: 1×16 GB; confirme o módulo e a compatibilidade antes da compra.')
+            memory_note.append('Confira fabricante, garantia e possibilidade de adicionar outro módulo compatível depois.')
+    elif offer.get('parcelamento_sem_juros') is True:
+        count = offer.get('parcelas')
+        plan = f'{count}x sem juros' if type(count) is int else 'Parcelamento sem juros'
+        qualifier = 'identificado como cartão' if offer.get('parcelamento_cartao_inferido') else 'no cartão anunciado'
+        memory_note.append(f'{plan}: {qualifier}; confirme o valor total no checkout.')
     if offer.get('categoria') == 'SSD':
         memory_note.append('Capacidade desejada: 1 TB ou 500 GB; confirme modelo e garantia.')
     return '\n'.join([
@@ -105,7 +122,9 @@ def format_alert(offer, evaluation):
         offer.get('nome_completo') or offer['peca'],
         f"Modelo identificado: {offer['peca']}",
         *memory_note,
-        f"Preço avaliado: {money(evaluation.get('preco_centavos') or offer.get('anunciado_centavos'))}",
+        (f"Preço anunciado: {money(offer['anunciado_centavos'])} (confirme o total no cartão)"
+         if offer.get('categoria') == 'RAM' and evaluation.get('preco_centavos') is None and offer.get('anunciado_centavos') is not None
+         else f"Preço avaliado: {money(evaluation.get('preco_centavos') or offer.get('anunciado_centavos'))}"),
         *([f"Total entregue estimado: {money(evaluation['total_entregue_centavos'])}"] if evaluation.get('total_entregue_centavos') is not None else []),
         f"PIX: {money(offer.get('pix_centavos'))} | Cartão total: {money(offer.get('cartao_centavos'))}",
         f"Forma avaliada: {evaluation.get('pagamento', 'indefinida')} | Parcelas: {offer.get('parcelas') or 'não informadas'}",

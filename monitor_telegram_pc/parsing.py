@@ -142,7 +142,7 @@ def _products(text: str, config: dict | None = None) -> list[tuple[str, str, flo
         else:
             label = "capacidade desconhecida"
         model = "DDR5 " + label
-        target = (config or {}).get("metas", {}).get(model, 1500)
+        target = (config or {}).get("metas", {}).get(model, 2400 if model == 'DDR5 2x16GB' else 1500)
         found.append(("RAM", model, float(target), False))
     return list(dict.fromkeys(found))
 
@@ -166,26 +166,29 @@ def store_link(text: str) -> str:
     return ""
 
 
-def _installment_terms(text: str) -> tuple[bool | None, int | None, int | None]:
-    """Associate interest and card evidence with an explicitly stated plan."""
+def _installment_terms(text: str) -> tuple[bool | None, int | None, int | None, bool]:
+    """Interpret an unqualified interest-free plan as card, per user preference."""
     statuses: list[bool] = []
     counts: set[int] = set()
     totals: set[int] = set()
+    inferred_card: list[bool] = []
     for line in URL_RE.sub('', text).splitlines():
         line = HISTORY_RE.split(line, maxsplit=1)[0]
         plans = re.findall(r'(?<!\w)(\d{1,2})\s*(?:x|×|parcelas?)(?!\w)', line, re.I)
         plans = [int(value) for value in plans if int(value) >= 2]
         if not plans:
             continue
-        counts.update(plans)
         free = bool(re.search(r'\b(?:sem\s+juros|s\s*/\s*juros|zero\s+juros|0\s*%\s*(?:de\s*)?juros)\b', line, re.I))
         charged = bool(re.search(r'\b(?:com\s+juros|c\s*/\s*juros|juros\s+de\s+\d)', line, re.I))
         card = bool(re.search(r'\b(?:cart[aã]o|cr[eé]dito)\b', line, re.I))
         other_plan = bool(re.search(r'(?:\d+\s*(?:x|×|parcelas?).{0,30}\b(?:no|via)\s+(?:pix|boleto|carn[eê])\b|'
                                     r'(?:sem\s+juros|s\s*/\s*juros)\s+(?:no|via)\s+(?:pix|boleto|carn[eê])\b)', line, re.I))
-        card_unavailable = bool(re.search(r'\bcart[aã]o\s+(?:n[aã]o|indispon[ií]vel)', line, re.I))
-        if free and card and not other_plan and not card_unavailable:
+        card_unavailable = bool(re.search(r'\bcart[aã]o\s+(?:n[aã]o\s+(?:aceito|dispon[ií]vel|permitido)|indispon[ií]vel)', line, re.I))
+        if not other_plan and not card_unavailable:
+            counts.update(plans)
+        if free and not other_plan and not card_unavailable:
             statuses.append(True)
+            inferred_card.append(not card)
             if len(plans) == 1 and not charged:
                 for match in INSTALLMENT_RE.finditer(line):
                     unit = cents(match[2])
@@ -203,7 +206,7 @@ def _installment_terms(text: str) -> tuple[bool | None, int | None, int | None]:
     status = next(iter(distinct)) if len(distinct) == 1 else None
     count = next(iter(counts)) if len(counts) == 1 else None
     total = next(iter(totals)) if status is True and count is not None and len(totals) == 1 else None
-    return status, count, total
+    return status, count, total, status is True and any(inferred_card)
 
 
 def _prices(text: str) -> dict[str, Any]:
@@ -238,6 +241,11 @@ def _prices(text: str) -> dict[str, Any]:
 
         line = coupon_pix.sub(coupon_total, line)
         for match in INSTALLMENT_RE.finditer(line):
+            following = line[match.end():]
+            other_method = re.match(r'\s*(?:(?:sem|com|s\s*/|c\s*/)\s*juros\s*)?(?:no|via)\s+(?:pix|boleto|carn[eê])\b', following, re.I)
+            if other_method:
+                conditions.append('Parcelamento anunciado em outro meio; condições do cartão não identificadas')
+                continue
             unit = cents(match[2])
             count = int(match[1])
             if unit and count > 0:
@@ -275,11 +283,12 @@ def _prices(text: str) -> dict[str, Any]:
                 bucket = "cartao"
                 counts.append(int(installments_suffix[1]))
             values[bucket].append(amount)
-    interest_free, described_count, interest_total = _installment_terms(clean)
+    interest_free, described_count, interest_total, inferred_card = _installment_terms(clean)
     if described_count is not None:
         counts.append(described_count)
     result: dict[str, Any] = {"parcelas": counts[0] if counts and len(set(counts)) == 1 else None,
                               "parcelamento_sem_juros": interest_free,
+                              "parcelamento_cartao_inferido": inferred_card,
                               "total_parcelado_sem_juros_centavos": interest_total}
     for bucket, amounts in values.items():
         distinct = set(amounts)
@@ -288,10 +297,15 @@ def _prices(text: str) -> dict[str, Any]:
             verify.append(f"Mais de um preço {bucket}; conferir condição e valor final")
         else:
             result[bucket + "_centavos"] = next(iter(distinct), None)
+    if interest_total is not None and result['cartao_centavos'] is None and len(set(values['cartao'])) <= 1:
+        result['cartao_centavos'] = interest_total
     if len(set(counts)) > 1:
         verify.append("Mais de um plano de parcelamento")
     if result["anunciado_centavos"] is not None:
-        verify.append("Forma de pagamento do preço anunciado não informada")
+        if interest_free is True and interest_total is None:
+            verify.append("Confirmar se o preço anunciado é o total parcelado no cartão")
+        elif interest_total != result['anunciado_centavos']:
+            verify.append("Forma de pagamento do preço anunciado não informada")
     if re.search(r"cupom|cashback|clube|prime|primeira\s+compra|apenas\s+no\s+app|frete", text, re.I):
         conditions.extend(line.strip() for line in text.splitlines() if re.search(r"cupom|cashback|clube|prime|primeira\s+compra|apenas\s+no\s+app|frete", line, re.I))
     if re.search(r"cashback|clube|primeira\s+compra|exclusivo", text, re.I):
@@ -301,6 +315,26 @@ def _prices(text: str) -> dict[str, Any]:
     result["verificar"] = list(dict.fromkeys(verify))
     result["condicoes"] = list(dict.fromkeys(conditions))
     return result
+
+
+def _ram_kits(text: str) -> set[tuple[int, int]]:
+    heading = re.split(r'R\$|https?://|\bpre[cç]o\s*:|\bcupom\s*:', text, maxsplit=1, flags=re.I)[0]
+    return {(int(count), int(size)) for count, size in
+            re.findall(r'\b([124])\s*[x×]\s*(\d+)\s*gb\b', heading, re.I)}
+
+
+def _refine_ram_product(product: tuple, text: str, config: dict | None) -> tuple:
+    """Read kit composition from the product heading, including wrapped lines."""
+    if product[0] != 'RAM' or product[3]:
+        return product
+    kits = _ram_kits(text)
+    if len(kits) != 1:
+        return product
+    count, size = next(iter(kits))
+    model = f'DDR5 {count}x{size}GB'
+    default = 2400 if model == 'DDR5 2x16GB' else 1500
+    target = (config or {}).get('metas', {}).get(model, default)
+    return ('RAM', model, float(target), product[3])
 
 
 def extract_prices(text: str, category: str) -> list[float]:
@@ -314,10 +348,15 @@ def _explicit_specs(text: str, category: str) -> dict[str, Any]:
     if category == 'RAM':
         speeds = {(int(value), unit.upper()) for value, unit in re.findall(r'\b(\d{4,5})\s*(MHz|MT/s)\b', text, re.I)}
         speeds = {(value, unit) for value, unit in speeds if 4000 <= value <= 10000}
+        result = {}
         if len(speeds) == 1:
             value, unit = speeds.pop()
-            return {'velocidade_memoria': value, 'frequencia_unidade': 'MT/s' if unit == 'MT/S' else 'MHz'}
-        return {}
+            result.update(velocidade_memoria=value, frequencia_unidade='MT/s' if unit == 'MT/S' else 'MHz')
+        kits = _ram_kits(text)
+        if len(kits) == 1:
+            count, size = next(iter(kits))
+            result.update(modulos=count, capacidade_por_modulo_gb=size)
+        return result
     if category != 'GPU':
         return {}
     result = {}
@@ -396,16 +435,18 @@ def parse_offers(channel: str, msg_id: int, date: datetime, text: str,
     starts = [(i, products) for i, products in starts if products]
     if not starts:
         products = _products(text, config)
-        return [_offer(channel, msg_id, date, text, p, text) for p in products]
+        return [_offer(channel, msg_id, date, text, _refine_ram_product(p, text, config), text) for p in products]
     models = {p[1] for _, products in starts for p in products}
     if len(models) == 1:
-        return [_offer(channel, msg_id, date, text, starts[0][1][0], text)]
+        product = _refine_ram_product(starts[0][1][0], text, config)
+        return [_offer(channel, msg_id, date, text, product, text)]
     offers = []
     for index, (start, products) in enumerate(starts):
         end = starts[index + 1][0] if index + 1 < len(starts) else len(lines)
         block = "\n".join(lines[start:end])
         ambiguous = len(products) > 1
         for product in products:
+            product = _refine_ram_product(product, block, config)
             offer = _offer(channel, msg_id, date, block, product, text,
                            ["Vários produtos no mesmo trecho; associação de preço ambígua"] if ambiguous else [])
             if ambiguous:

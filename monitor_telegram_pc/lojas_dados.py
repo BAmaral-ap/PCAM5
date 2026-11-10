@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from datetime import datetime, timezone
 
 from notifications import money
@@ -65,7 +66,9 @@ def _message(item, current, previous, event, observed, hint, cfg, purchases=()):
     display_event = 'RAM — VERIFICAR PREÇO E PARCELAMENTO' if item.get('categoria') == 'RAM' else event
     lines = [f"🔥 LOJA — {display_event}", f"Produto: {item['nome']}", f"Loja: {item['loja']}"]
     if item.get('categoria') == 'RAM':
-        lines.append('⚠️ Parcelamento sem juros ainda não confirmado. Confirme o total no cartão e 1×16 GB.')
+        kit = re.search(r'\b2\s*[x×]\s*16\s*gb\b', item['nome'], re.I)
+        desired = '2×16 GB' if kit else '1×16 GB'
+        lines.append(f'⚠️ Parcelamento sem juros ainda não confirmado. Confirme o total no cartão e {desired}.')
         lines.append('As parcelas da RAM serão pagas com renda pessoal separada da reserva à vista.')
     for label, key in fields:
         current_price = current.get(key)
