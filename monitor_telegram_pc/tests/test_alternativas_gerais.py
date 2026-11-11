@@ -5,11 +5,17 @@ from finance import evaluate_offer
 from parsing import parse_offers
 from settings import load_config
 
+def historical_build(cfg):
+    cfg['montagem']['CPU'] = {'modelo': 'Ryzen 7 7800X3D', 'estimativa_pix': 1750, 'pagamento': 'pix'}
+    cfg['montagem']['RAM'].update(pagamento='cartao', fonte_pagamento='renda_pessoal_separada',
+                                  parcelamento='cartao_sem_juros', estimativa_cartao=1500)
+
 class AlternativasTests(unittest.TestCase):
     def setUp(self):
         self.cfg = load_config()
         # Este teste cobre a montagem anterior à compra, com orçamento conhecido.
         self.cfg['orcamento'].update(pix=10000, total_maximo=12500)
+        historical_build(self.cfg)
         self.cfg['alertar_orcamento_incerto'] = False
     def analyze(self, text, cfg=None, purchases=None):
         offer = parse_offers('pcbuildwizard', 1, datetime.now(timezone.utc), text, cfg or self.cfg)[0]
@@ -66,6 +72,7 @@ class AlternativeAlertTests(unittest.TestCase):
         from pathlib import Path
         cfg = load_config(); now = datetime.now(timezone.utc)
         cfg['orcamento'].update(pix=10000, total_maximo=12500)
+        historical_build(cfg)
         cfg['alertar_orcamento_incerto'] = False
         with tempfile.TemporaryDirectory() as directory:
             store = Store(Path(directory) / 'state.sqlite3')

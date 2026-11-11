@@ -17,7 +17,7 @@ def load_config(path: Path | str | None = None) -> dict:
     cfg['canais'] = list(dict.fromkeys(normalize_channel(c) for c in channels))
     for name in ('pix', 'cartao'):
         amount = cfg['orcamento'][name]
-        if name == 'pix' and amount is None:
+        if amount is None:
             continue
         if isinstance(amount, bool) or not isinstance(amount, (int, float)) or amount < 0:
             raise ValueError('Orçamento deve conter valores não negativos.')

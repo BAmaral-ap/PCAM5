@@ -27,6 +27,9 @@ class OffersTests(unittest.TestCase):
         for purchase in PURCHASES:
             self.store.add_purchase(purchase)
         self.cfg = load_config()
+        # Estes casos verificam que configurações anteriores continuam suportadas.
+        self.cfg['montagem']['RAM'].update(pagamento='cartao', fonte_pagamento='renda_pessoal_separada',
+                                           parcelamento='cartao_sem_juros', estimativa_cartao=1500)
         self.now = datetime.now(timezone.utc)
         self.store.set_meta('alerts_started_at', self.now.isoformat())
 
@@ -130,8 +133,8 @@ class OffersTests(unittest.TestCase):
         self.assertEqual(result['pagamento'], 'cartao')
         self.assertEqual(result['preco_centavos'], 130000)
         self.assertEqual(result['orcamento']['projecao_total_avista_centavos'], baseline['projecao_total_avista_centavos'])
-        self.assertEqual(result['orcamento']['projecao_total_cartao_centavos'], 130000)
-        self.assertEqual(result['orcamento']['total_projetado_centavos'], baseline['projecao_total_avista_centavos'] + 130000)
+        self.assertEqual(result['orcamento']['projecao_total_cartao_centavos'], 336002)
+        self.assertEqual(result['orcamento']['total_projetado_centavos'], baseline['projecao_total_avista_centavos'] + 336002)
         with self.assertRaisesRegex(ValueError, 'cartão parcelado sem juros'):
             budget_snapshot(self.cfg, self.store.purchases(), offer, 'pix')
 
@@ -258,8 +261,8 @@ class MigrationTests(unittest.TestCase):
             with Store(db) as store:
                 pending = store.pending_notifications()
                 self.assertEqual(len(pending), 1)
-                self.assertIn('VERIFICAR PARCELAMENTO', pending[0]['payload'])
-                self.assertIn('⚠️ Parcelamento sem juros ainda não confirmado.', pending[0]['payload'])
+                self.assertIn('Confira os valores à vista', pending[0]['payload'])
+                self.assertIn('PIX: R$ 1.000,00', pending[0]['payload'])
 
     def test_legacy_ssd_csv_reprocessing_preserves_unknown_target(self):
         with tempfile.TemporaryDirectory() as directory, Store(Path(directory) / 'state.db') as store:
@@ -301,13 +304,13 @@ class MigrationTests(unittest.TestCase):
             self.assertEqual(updated['montagem']['SSD']['estimativa_pix'], 700)
             self.assertEqual(updated['config_usuario'], {'preservar': True})
             with Store(db) as store:
-                self.assertEqual(len(store.purchases()), 4)
+                self.assertEqual(len(store.purchases()), 5)
                 self.assertTrue(next(p for p in store.purchases() if p['categoria'] == 'SSD')['monitorar_novamente'])
                 self.assertTrue(store.get_meta(UPDATE_ID))
                 report = budget_snapshot(updated, store.purchases())
                 self.assertIn('SSD', {item['categoria'] for item in report['faltantes']})
-                self.assertEqual(report['total_comprado_centavos'], 122798)
-                self.assertEqual(report['fonte_pagamento_ram'], 'renda_pessoal_separada')
+                self.assertEqual(report['total_comprado_centavos'], 328800)
+                self.assertEqual(report['fonte_pagamento_ram'], 'a_definir')
                 self.assertIsNone(report['reserva_avista_prevista_centavos'])
 
 

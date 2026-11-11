@@ -9,6 +9,10 @@ from finance import (
 
 def config():
     build = copy.deepcopy(DEFAULT_BUILD)
+    # Exercita a política anterior explicitamente, sem depender da montagem atual.
+    build['CPU'] = {'modelo': 'Ryzen 7 7800X3D', 'estimativa_pix': 1700, 'pagamento': 'pix'}
+    build['RAM'].update(pagamento='cartao', fonte_pagamento='renda_pessoal_separada',
+                        parcelamento='cartao_sem_juros')
     # Demais cálculos deste conjunto usam a situação histórica com SSD existente.
     build['SSD'] = {'modelo': 'SSD existente', 'possui': True}
     # Independent planning assumption supplied by the user, not copied from

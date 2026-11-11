@@ -68,8 +68,11 @@ def _message(item, current, previous, event, observed, hint, cfg, purchases=()):
     if item.get('categoria') == 'RAM':
         kit = re.search(r'\b2\s*[x×]\s*16\s*gb\b', item['nome'], re.I)
         desired = '2×16 GB' if kit else '1×16 GB'
-        lines.append(f'⚠️ Parcelamento sem juros ainda não confirmado. Confirme o total no cartão e {desired}.')
-        lines.append('As parcelas da RAM serão pagas com renda pessoal separada da reserva à vista.')
+        if cfg.get('montagem', {}).get('RAM', {}).get('parcelamento') == 'cartao_sem_juros':
+            lines.append(f'⚠️ Parcelamento sem juros ainda não confirmado. Confirme o total no cartão e {desired}.')
+            lines.append('As parcelas da RAM serão pagas com renda pessoal separada da reserva à vista.')
+        else:
+            lines.append(f'Confira o preço à vista, as condições do cartão e se a memória é {desired}.')
     for label, key in fields:
         current_price = current.get(key)
         old = (previous or {}).get(key)
@@ -94,7 +97,9 @@ def _message(item, current, previous, event, observed, hint, cfg, purchases=()):
     ]
     known = [v for v in _price_fields(current).values() if v is not None]
     if known and item.get('familia') == 'RX 9070 XT':
-        lines.append('Faixa preliminar: ' + tier(min(known), cfg))
+        shipping = current.get('frete_centavos')
+        value = min(known) + shipping if type(shipping) is int and shipping >= 0 else min(known)
+        lines.append('Faixa preliminar: ' + tier(value, cfg))
         profiles = cfg.get('perfis', {})
         bought = {p.get('categoria'): profiles.get(p.get('modelo'), {}) for p in purchases
                   if not p.get('monitorar_novamente', False)}

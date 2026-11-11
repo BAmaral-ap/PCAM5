@@ -21,6 +21,9 @@ class KitRamTests(unittest.TestCase):
         self.store = Store(Path(self.tmp.name) / 'teste.sqlite3')
         self.addCleanup(self.store.close)
         self.cfg = load_config()
+        # Preserva a cobertura da política histórica exclusiva de cartão.
+        self.cfg['montagem']['RAM'].update(pagamento='cartao', fonte_pagamento='renda_pessoal_separada',
+                                           parcelamento='cartao_sem_juros', estimativa_cartao=1500)
         self.now = datetime.now(timezone.utc)
         self.store.set_meta('alerts_started_at', self.now.isoformat())
 
@@ -117,8 +120,8 @@ class KitRamTests(unittest.TestCase):
         self.assertEqual(result['meta_centavos'], 150000)
         self.assertEqual(result['preco_centavos'], 120000)
         self.assertEqual(result['pagamento'], 'cartao')
-        self.assertEqual(result['orcamento']['projecao_total_avista_centavos'], 915798)
-        self.assertEqual(result['orcamento']['projecao_total_cartao_centavos'], 120000)
+        self.assertEqual(result['orcamento']['projecao_total_avista_centavos'], 740798)
+        self.assertEqual(result['orcamento']['projecao_total_cartao_centavos'], 326002)
 
     def test_other_kits_and_notebook_memory_do_not_alert(self):
         for title in ('DDR5 2x8GB', 'DDR5 4x8GB', 'DDR5 1x32GB', 'DDR5 SODIMM notebook 2x16GB'):
@@ -168,8 +171,7 @@ class KitRamTests(unittest.TestCase):
         self.assertTrue(offer['parcelamento_cartao_inferido'])
         self.assertEqual(offer['parcelas'], 10)
         self.assertIsNone(offer['total_parcelado_sem_juros_centavos'])
-        self.assertTrue(alerts)
-        self.assertIn('10x sem juros: identificado como cartão', alerts[0]['payload'])
+        self.assertEqual(alerts, [])  # Processador já comprado, mesmo com parcelamento detectado.
 
     def test_gpu_alert_also_shows_interest_free_card_plan(self):
         _, alerts = self.alerts('XFX RX 9070 XT 16GB\nPreço: R$ 3.978\n10x sem juros')

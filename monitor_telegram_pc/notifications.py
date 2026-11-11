@@ -89,6 +89,7 @@ def format_alert(offer, evaluation):
         unit = specs.get('frequencia_unidade') if specs.get('frequencia_unidade') in {'MHz', 'MT/s'} else 'MHz'
         memory_note = [f'RAM: {speed} {unit} ({preference}; referência 5600–6000 MT/s)']
     if offer.get('categoria') == 'RAM':
+        flexible = evaluation.get('politica_ram') == 'flexivel'
         if offer.get('parcelamento_sem_juros') is True:
             if offer.get('parcelamento_cartao_inferido'):
                 count = offer.get('parcelas')
@@ -96,6 +97,10 @@ def format_alert(offer, evaluation):
                 memory_note.append(f'{plan}: identificado como cartão; confirme preço e condições no checkout.')
             else:
                 memory_note.append('Parcelamento sem juros anunciado no cartão; confirme preço e condições no checkout.')
+        elif flexible and offer.get('parcelamento_sem_juros') is False:
+            memory_note.append('Parcelamento com juros anunciado; confira também o valor à vista.')
+        elif flexible:
+            memory_note.append('Confira os valores à vista, no cartão e as condições de pagamento disponíveis.')
         else:
             memory_note.append('⚠️ Parcelamento sem juros ainda não confirmado.')
         pix, card = offer.get('pix_centavos'), offer.get('total_parcelado_sem_juros_centavos')
@@ -122,7 +127,8 @@ def format_alert(offer, evaluation):
         offer.get('nome_completo') or offer['peca'],
         f"Modelo identificado: {offer['peca']}",
         *memory_note,
-        (f"Preço anunciado: {money(offer['anunciado_centavos'])} (confirme o total no cartão)"
+        (f"Preço anunciado: {money(offer['anunciado_centavos'])} " +
+         ('(confirme pagamento e frete)' if evaluation.get('politica_ram') == 'flexivel' else '(confirme o total no cartão)')
          if offer.get('categoria') == 'RAM' and evaluation.get('preco_centavos') is None and offer.get('anunciado_centavos') is not None
          else f"Preço avaliado: {money(evaluation.get('preco_centavos') or offer.get('anunciado_centavos'))}"),
         *([f"Total entregue estimado: {money(evaluation['total_entregue_centavos'])}"] if evaluation.get('total_entregue_centavos') is not None else []),
@@ -132,9 +138,11 @@ def format_alert(offer, evaluation):
         f"Diferença: {money(diff)} ({percent:+.1f}%)" if percent is not None else 'Diferença: requer verificação',
         f"Loja: {offer.get('loja') or 'não identificada'} | Cupom: {offer.get('cupom') or 'não informado'}",
         f"PIX após compra: {money(budget.get('saldo_pix_apos_centavos'))}",
-        f"Cartão livre após compra: {money(budget.get('limite_cartao_apos_centavos'))}",
+        f"Limite de cartão estimado após compra: {money(budget.get('limite_cartao_apos_centavos'))}",
         f"Montagem projetada: {money(budget.get('total_projetado_centavos'))}",
         f"Estimativa das peças restantes: PIX {money(budget.get('restante_pix_centavos'))} | Cartão {money(budget.get('restante_cartao_centavos'))}",
+        *([f"Peças restantes com pagamento a definir: {money(budget.get('restante_pagamento_indefinido_centavos'))}"]
+          if any(part.get('pagamento') == 'indefinido' for part in budget.get('faltantes', [])) else []),
         'Motivo: ' + '; '.join(reasons),
         'Condições: ' + '; '.join(offer.get('condicoes', []) + offer.get('verificar', [])),
         offer.get('link_loja') or offer['link'],

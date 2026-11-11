@@ -116,12 +116,12 @@ Confira `logs/monitor.log`. Desabilite a tarefa para suspender a automação. Se
 
 Alertas de placas-mãe explicitamente identificadas como AM4 ou por chipsets AM4 são descartados. Fontes só geram alerta quando o título identifica 850 W sem potência conflitante; se a potência não estiver clara no título, não há alerta. Essas regras não comprovam qualidade nem compatibilidade das demais peças.
 
-A RX 9070 XT tem triagem preliminar separada: até R$ 4.700 IMPERDÍVEL; até R$ 4.900 EXCELENTE; até R$ 5.100 BOA COMPRA; até R$ 5.300 AVALIAR; acima disso PREÇO ALTO. Configure `rx9070xt_faixas` em `config.json`. O alerta preliminar não depende de pagamento, frete ou análise Gemini e não comprova preço ou estoque. Mensagens com vários preços são sinalizadas para conferência. Alertas preliminares da GPU não aguardam o Gemini.
+A RX 9070 XT tem triagem preliminar separada: até R$ 4.700 IMPERDÍVEL; até R$ 4.900 EXCELENTE; até R$ 5.100 BOA COMPRA; até R$ 5.300 AVALIAR; acima disso PREÇO ALTO. Configure `rx9070xt_faixas` em `config.json`. Quando o anúncio informa frete para Belém, o valor é somado ao preço na classificação; caso contrário o alerta pede confirmação. O alerta não depende de pagamento ou análise Gemini e não comprova preço ou estoque. Mensagens com vários preços são sinalizadas para conferência. Alertas preliminares da GPU não aguardam o Gemini.
 
 Edite `config.json` e reinicie o monitor para aplicar mudanças. Os canais iniciais são:
 
 ```json
-"canais": ["https://t.me/pcbuildwizard", "https://t.me/LaPromotion"]
+"canais": ["pcbuildwizard", "lapromotion", "poisonpromos", "tecmanualofertas"]
 ```
 
 Adicione ou remova entradas nessa lista. Use canais públicos ou nomes `@usuario`, sem convites privados. A conta deve ter autorização para ler o histórico.
@@ -148,9 +148,9 @@ Inicialmente, `excepcional_percentual: 10` exige 10% ou mais abaixo da meta; `bo
 - **VERIFICAR:** preço, pagamento, meta ou extração ambíguos; não há certeza suficiente para recomendar.
 - **AVALIAR ALTERNATIVA:** anúncio sem modelo cadastrado dentro da margem de triagem. Confira modelo, qualidade, compatibilidade e orçamento; a etiqueta não comprova que o produto seja bom.
 
-As duas primeiras classes e `AVALIAR ALTERNATIVA` notificam por padrão. A triagem ampliada aceita até 25% acima da meta da peça de referência; ajuste `alternativas_gerais.margem_percentual` ou desative `alternativas_gerais.ativado` em `config.json`. Com orçamento pendente, CPU, placa-mãe, RAM e SSD ainda podem gerar alerta provisório para verificação. O SSD tem limite próprio de R$ 700; o preço final com frete deve ser confirmado. Preços ou condições ambíguos não entram na triagem de alternativas. Ventoinhas não fazem parte dessa ampliação. Ofertas rejeitadas permanecem no banco.
+As duas primeiras classes e `AVALIAR ALTERNATIVA` notificam por padrão. A triagem ampliada aceita até 25% acima da meta da peça de referência; ajuste `alternativas_gerais.margem_percentual` ou desative `alternativas_gerais.ativado` em `config.json`. Com orçamento pendente, placa-mãe, RAM e SSD ainda podem gerar alerta provisório para verificação. O SSD tem limite próprio de R$ 700; o preço final com frete deve ser confirmado. Preços ou condições ambíguos não entram na triagem de alternativas. Ventoinhas não fazem parte dessa ampliação. Ofertas rejeitadas permanecem no banco.
 
-A RAM pode ser um módulo DDR5 de 1×16 GB ou um kit de 2×16 GB, no cartão parcelado sem juros. O limite do kit é R$ 2.400 e pode ser alterado em `metas["DDR5 2x16GB"]`; a meta do módulo único continua independente. Por preferência do usuário, expressões como “10x sem juros” são interpretadas como parcelamento no cartão, salvo quando o anúncio informar outro meio. Se preço e parcelamento aparecerem separados sem associação clara, o alerta mostra o preço anunciado e pede confirmação do total no cartão. Ofertas com juros não são recomendadas; um preço no PIX nunca é convertido em preço no cartão. Quando ambos são informados, o alerta mostra os dois totais. O Gemini não complementa alertas de RAM, para não contradizer essa regra de pagamento.
+A RAM pode ser um módulo DDR5 de 1×16 GB ou um kit de 2×16 GB, com pagamento ainda a definir. O limite do kit é R$ 2.400 e pode ser alterado em `metas["DDR5 2x16GB"]`; a meta do módulo único continua independente. Ofertas à vista e com parcelamento não confirmado também são examinadas. Expressões como “10x sem juros” são interpretadas como parcelamento no cartão, salvo quando o anúncio informar outro meio. Se preço e parcelamento aparecerem separados sem associação clara, o alerta mostra o preço anunciado e pede confirmação do total no cartão. Parcelamento com juros não é recomendado; um preço no PIX nunca é convertido em preço no cartão. Quando ambos são informados, o alerta mostra os dois totais. O Gemini não complementa alertas de RAM, evitando sugestões financeiras contraditórias.
 
 ### Compatibilidade e alternativas
 
@@ -159,7 +159,7 @@ Os perfis iniciais indicam a plataforma pretendida; não atestam dimensões de u
 ```json
 "compatibilidade": {
   "confirmacoes": {
-    "Ryzen 7 7800X3D": true
+    "MODELO-EXATO-VERIFICADO": true
   }
 }
 ```
@@ -173,10 +173,10 @@ Esse exemplo é uma confirmação manual. Não marque todos os modelos sem confe
 | GPU | `comprimento_mm`, `fonte_minima_w`, `conectores_requeridos` |
 | Fonte | `potencia_w`, `formato`, `conectores` |
 | Cooler | `altura_mm`, `sockets` (lista de sockets suportados) |
-| Placa-mãe | `formato` |
+| Placa-mãe | `formato`, `suporte_9800x3d`, `fonte_suporte_9800x3d`, `bios_minima_9800x3d`, `bios_instalada`, `bios_9800x3d_confirmada`, `vrm_adequado_9800x3d`, `slots_m2_nvme` |
 | Gabinete | `gpu_max_mm`, `cooler_max_mm`, `formatos_placa_mae` (lista) |
 
-Use valores da variante exata e unidades indicadas. Ausência de especificação não prova encaixe. Uma RX 9070 XT de outro fabricante pode ter dimensões diferentes.
+Use valores da variante exata e unidades indicadas. Consulte a lista de suporte do fabricante para verificar o 9800X3D e a versão mínima de BIOS; a versão efetivamente instalada também precisa ser confirmada. Esses dados ausentes geram avisos, sem descartar automaticamente uma placa-mãe. Ausência de especificação não prova encaixe. Uma RX 9070 XT de outro fabricante pode ter dimensões diferentes.
 
 Para uma alternativa, configure sua meta e um perfil com a identificação retornada pelo parser. Perfis com `verificado: true` podem incluir `consumo_w`, `desempenho_indice`, `benchmark`, `longevidade`, `garantia_anos` e `fonte`. Use fontes e medições comparáveis: reais por ponto exige o mesmo benchmark. O sistema não inventa vantagem de consumo, desempenho em 1440p/4K ou longevidade. Consulte as análises e comparações das 20 ofertas novas mais recentes com `python monitor.py --offers`.
 
@@ -198,9 +198,11 @@ A identidade específica prevalece sobre a família genérica. Complete `perfis`
 
 O relatório separa reserva PIX, crédito, compras, parcelas por mês, peças faltantes e total projetado. Crédito não é dinheiro recebido nem aumenta o saldo PIX.
 
-O orçamento global **previsto** anterior de R$ 9.450,00 permanece no cadastro, condicionado às entradas planejadas; R$ 5.000 pelo site continuam pendentes. Esse valor não representa saldo disponível nem uma reserva à vista confirmada. O limite do cartão não é receita. A RAM fica no custo total do PC, mas suas parcelas serão pagas com outra renda pessoal, separada da reserva à vista, dos R$ 5.000 do site e dos recursos de dezembro. O valor disponível dessa outra renda não foi informado.
+O orçamento global **previsto** de R$ 9.450,00 permanece no cadastro, condicionado às entradas planejadas; R$ 5.000 pelo site continuam pendentes. Esse valor não representa saldo disponível nem uma reserva à vista confirmada. O limite do cartão não é receita.
 
-As compras confirmadas somam R$ 927,98 e o saldo restante da referência global é R$ 8.522,02. Com as estimativas atuais das cinco peças faltantes, o custo do PC é R$ 10.657,98: R$ 9.157,98 em compras à vista, incluindo as já feitas, e R$ 1.500 estimados para RAM no cartão. O valor à vista não é uma afirmação de que esse dinheiro já está disponível. A projeção global supera a referência de R$ 9.450 em R$ 1.207,98; RAM e SSD ainda são estimativas. O SSD de R$ 700 é uma reserva de planejamento no máximo informado, não um preço confirmado. A meta de R$ 1.750 para o 7800X3D inclui frete; se ele não estiver disponível, o alerta pede confirmação do total entregue.
+As quatro compras totalizam R$ 2.988,00 comprometidos: R$ 927,98 nas três peças à vista e R$ 2.060,02 no cartão para o processador. Sem nenhuma parcela confirmada como paga, o desembolso registrado é R$ 927,98. O saldo de R$ 6.462,00 frente à referência prevista de R$ 9.450 não é caixa disponível. Com as metas e estimativas atuais das quatro peças pendentes, a projeção da montagem é R$ 10.968,00, R$ 1.518,00 acima dessa referência. Os R$ 1.500 para RAM e os R$ 700 para SSD são estimativas, não preços confirmados; a forma de pagamento da RAM permanece indefinida.
+
+A simulação de empréstimo de R$ 2.680, com R$ 659,60 de custo adicional, não é contratação nem saldo disponível. Somente um financiamento explicitamente registrado como contratado e confirmado inclui seus encargos no custo total; as despesas efetivamente pagas também devem ser informadas, sem duplicar o valor das peças.
 
 `orcamento.total_maximo` é a referência total da montagem, não dinheiro disponível. Parcelas já pagas continuam consumindo esse teto: liberar crédito não cria orçamento adicional. Inclua frete, juros e acessórios nas estimativas e no total confirmado da compra. Se souber o saldo inicial reservado para a montagem, informe `orcamento.pix` com atenção às compras já registradas.
 
@@ -213,15 +215,15 @@ Pare o monitor e, no computador com o banco existente, execute:
 .\.venv\Scripts\python.exe monitor.py --budget
 ```
 
-O comando registra cooler ARCTIC Freezer 36 (R$ 215,81), Montech XR White (R$ 317,12) e Pichau Cluster 850W (R$ 395,05), marca o SSD como necessário e atualiza a política da RAM. Ele reconhece o cooler antigo, não duplica os registros e interrompe sem mudar as compras se encontrar conflito de valor ou pagamento. A fonte fica paga e comprada, com entrega em preparação. O gabinete é registrado como `avista` porque a forma específica não foi informada. Histórico anterior de SSD é preservado sem presumir que o item ainda está disponível. O comando preserva os canais e as configurações personalizadas; uma repetição não desfaz alterações posteriores.
+O comando registra cooler ARCTIC Freezer 36 (R$ 215,81), Montech XR White (R$ 317,12), Pichau Cluster 850W (R$ 395,05) e Ryzen 7 9800X3D (R$ 2.060,02 em 6 vezes sem juros). Ele reconhece compras já registradas, não duplica os registros e interrompe ao encontrar conflitos que não possa conciliar com segurança. A fonte fica paga e comprada, com entrega em preparação. O gabinete é registrado como `avista` porque a forma específica não foi informada. Histórico anterior de SSD é preservado sem presumir que o item ainda está disponível. O comando preserva canais e configurações personalizadas; uma repetição não desfaz reativações posteriores.
 
-Fonte, gabinete e coolers deixam de gerar alertas de compra, enquanto GPU, CPU, placa-mãe, RAM e SSD NVMe continuam. Priorize SSDs de 1 TB ou 500 GB até R$ 700 e confira o frete. Quando a velocidade da RAM é identificada, o alerta destaca a faixa preferida de 5600–6000 MT/s e reproduz a unidade anunciada; uma opção fora da faixa não é descartada automaticamente nem se exige CL30. Para reativar uma categoria sem apagar o histórico nem presumir estorno, pare o monitor e use, por exemplo:
+CPU, fonte, gabinete e coolers deixam de gerar alertas de compra, enquanto GPU, placa-mãe, RAM e SSD NVMe continuam. Priorize SSDs de 1 TB ou 500 GB até R$ 700 e confira o frete. Quando a velocidade da RAM é identificada, o alerta destaca a faixa preferida de 5600–6000 MT/s e reproduz a unidade anunciada; uma opção fora da faixa não é descartada automaticamente nem se exige CL30. Para reativar uma categoria sem apagar o histórico nem presumir estorno, pare o monitor e use, por exemplo:
 
 ```powershell
 .\.venv\Scripts\python.exe monitor.py --reativar-categoria FONTE --confirmar
 ```
 
-As demais opções são `GABINETE` e `COOLER-CPU`. A reativação adiciona novamente a estimativa da categoria às peças faltantes e mantém o gasto anterior. O gabinete oferece 420 mm para GPU e 175 mm para cooler; o ARCTIC tem 159 mm. A fonte é de 850 W. Dimensões específicas da GPU, potência recomendada e quantidade dos conectores ainda precisam ser confirmadas por modelo.
+As demais opções são `CPU`, `GABINETE` e `COOLER-CPU`. A reativação adiciona novamente a categoria às peças faltantes e mantém o gasto anterior. O gabinete oferece 420 mm para GPU e 175 mm para cooler; o ARCTIC tem 159 mm. A fonte é de 850 W. Dimensões específicas da GPU, potência recomendada e quantidade dos conectores ainda precisam ser confirmadas por modelo.
 
 ### Registrar uma compra que você já fez
 
@@ -252,13 +254,13 @@ Substitua os dados do exemplo antes de confirmar. Use o total efetivamente contr
 
 Para PIX, use `"pagamento": "pix"`, `"parcelas": 1`, `"parcelas_pagas": 0`; a primeira parcela é dispensável. Use `"avista"` quando a forma específica do pagamento à vista não for conhecida. Categorias: `CPU`, `GPU`, `PLACA-MAE`, `RAM`, `FONTE`, `COOLER-CPU`, `GABINETE`, `SSD`.
 
-Depois de pagar uma parcela da compra de ID 1:
+Depois de pagar uma parcela, confira o ID da compra em `--budget` e informe o valor real da fatura em centavos. Por exemplo, para uma compra com ID 4 e parcela efetiva de R$ 343,34:
 
 ```powershell
-.\.venv\Scripts\python.exe monitor.py --pay-installment 1 --confirmar
+.\.venv\Scripts\python.exe monitor.py --pay-installment 4 --valor-pago-centavos 34334 --confirmar
 ```
 
-Cada execução confirma **uma parcela**; não repita para a mesma parcela. O passar do mês não quita fatura nem libera crédito. A reserva PIX é para peças; o sistema não presume que ela paga as faturas, que são compromissos de renda futura. Se usar essa reserva para pagar o cartão, ajuste o planejamento ao dinheiro realmente disponível.
+O ID e o valor acima são exemplos: confira os dados reais. A primeira parcela do Ryzen vence em 10/12/2026 e as demais no dia 10, até 10/05/2027. Como R$ 2.060,02 não se dividem igualmente em centavos, os valores individuais apresentados são estimados e devem ser conferidos na fatura. Cada execução confirma **uma parcela**; não repita para a mesma parcela. O passar do mês não quita fatura nem libera crédito. A reserva PIX é para peças; o sistema não presume que ela paga as faturas. Se usar essa reserva para pagar o cartão, ajuste o planejamento ao dinheiro realmente disponível.
 
 ## 6. Histórico e CSVs existentes
 

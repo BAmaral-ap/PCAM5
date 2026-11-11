@@ -19,6 +19,7 @@ def price_candidates(text):
                     or not (line[:m.start()].strip() or line[m.end():].strip())):
                 continue
             if re.search(r'(?:\bde|antes|era|frete|cashback|sku|c[oó]digo|modelo)\s*[:\-]?\s*$', before, re.I): continue
+            if re.search(r'\bfrete\s+para\s+[^:]{1,50}:\s*$', before, re.I): continue
             if re.search(r'\d+\s*[x×]\s*(?:de\s*)?(?:R\$\s*)?$', before, re.I): continue
             if re.match(r'\s*(?:gb|mhz|mm|w|parcelas?\b)', after, re.I): continue
             raw=m.group(1)

@@ -7,18 +7,19 @@ O caixa PIX é a reserva para peças, não a renda futura usada para pagar o car
 from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from datetime import date
 import re
 from typing import Any
 
 
 DEFAULT_BUILD = {
-    "CPU": {"modelo": "Ryzen 7 7800X3D", "estimativa_pix": 1700, "pagamento": "pix"},
+    "CPU": {"modelo": "Ryzen 7 9800X3D", "estimativa_pix": None, "pagamento": "cartao"},
     "GPU": {"modelo": "RX 9070 XT 16GB", "estimativa_pix": 4700, "pagamento": "pix"},
     "PLACA-MAE": {"modelo": "ASUS B650M-AYW", "estimativa_pix": 680, "pagamento": "pix"},
     # Preço no cartão desconhecido: não reutilizar a meta PIX como promessa.
     "RAM": {"modelo": "DDR5 16GB", "estimativa_pix": 1500,
-            "estimativa_cartao": None, "pagamento": "cartao", "fonte_pagamento": "renda_pessoal_separada",
-            "parcelamento": "cartao_sem_juros"},
+            "estimativa_cartao": None, "pagamento": "indefinido", "fonte_pagamento": "a_definir",
+            "parcelamento": "opcional"},
     "FONTE": {"modelo": "XPG Core Reactor II VE 850W", "estimativa_pix": 490, "pagamento": "pix"},
     "COOLER-CPU": {"modelo": "Cooler AM5", "estimativa_pix": 200, "pagamento": "pix"},
     "GABINETE": {"modelo": "Gabinete", "estimativa_pix": 250, "pagamento": "pix"},
@@ -104,15 +105,14 @@ def budget_snapshot(config: dict, purchases: list[dict], candidate: dict | None 
     if payment not in {"pix", "cartao"}:
         raise ValueError("Pagamento deve ser pix ou cartao.")
     limits = config.get("orcamento", {})
-    cash_raw = limits.get("pix", 10000)
+    cash_raw = limits.get("pix")
     cash = None if cash_raw is None else cents(cash_raw)
-    credit = cents(limits.get("cartao", 2500))
+    credit_raw = limits.get("cartao")
+    credit = None if credit_raw is None else cents(credit_raw)
     build = config.get("montagem", DEFAULT_BUILD)
     # Total project ceiling, not a spending target. Paying a credit-card bill
     # restores the revolving limit but never increases this assembly budget.
-    separate_ram = build.get('RAM', {}).get('fonte_pagamento') == 'renda_pessoal_separada'
-    total_cap = (cents(limits["total_maximo"]) if "total_maximo" in limits else
-                 None if separate_ram else (cash + credit if cash is not None else None))
+    total_cap = cents(limits["total_maximo"]) if limits.get("total_maximo") is not None else None
     bought = [validate_purchase(p) for p in purchases]
     spent_pix = sum(p["total_centavos"] for p in bought if p["pagamento"] == "pix")
     spent_other_cash = sum(p["total_centavos"] for p in bought if p["pagamento"] == "avista")
@@ -120,27 +120,56 @@ def budget_snapshot(config: dict, purchases: list[dict], candidate: dict | None 
     all_paid = sum(p["total_centavos"] for p in bought)
     outstanding = 0
     paid_card = 0
+    card_amounts_known = True
+    payment_warnings: list[str] = []
     schedule: dict[str, int] = {}
     ram_schedule: dict[str, int] = {}
+    due_dates: dict[str, int] = {}
     for p in bought:
         if p["pagamento"] != "cartao":
             continue
         pieces = installments(p["total_centavos"], p["parcelas"])
-        paid_card += sum(pieces[:p["parcelas_pagas"]])
-        outstanding += sum(pieces[p["parcelas_pagas"]:])
-        for index in range(p["parcelas_pagas"], p["parcelas"]):
+        paid_count = p['parcelas_pagas']
+        actual = p.get('valores_pagos_centavos')
+        if p.get('rateio_estimado') and paid_count:
+            if (not isinstance(actual, list) or len(actual) != paid_count
+                    or any(type(value) is not int or value <= 0 for value in actual)
+                    or sum(actual) > p['total_centavos']):
+                card_amounts_known = False
+                payment_warnings.append(f"Valores das parcelas pagas de {p['modelo']} não informados; saldo do cartão é desconhecido.")
+                continue
+            paid_amount = sum(actual)
+            unpaid = p['total_centavos'] - paid_amount
+            if (paid_count == p['parcelas'] and unpaid != 0) or (paid_count < p['parcelas'] and unpaid < p['parcelas'] - paid_count):
+                raise ValueError('Valores das parcelas pagas não correspondem ao total contratado.')
+            remaining_pieces = installments(unpaid, p['parcelas'] - paid_count) if unpaid else []
+        else:
+            paid_amount = sum(pieces[:paid_count])
+            unpaid = sum(pieces[paid_count:])
+            remaining_pieces = pieces[paid_count:]
+        paid_card += paid_amount
+        outstanding += unpaid
+        for offset, amount in enumerate(remaining_pieces):
+            index = paid_count + offset
             month = _month(p["primeira_parcela"], index)
-            schedule[month] = schedule.get(month, 0) + pieces[index]
+            schedule[month] = schedule.get(month, 0) + amount
+            if p.get('dia_vencimento') is not None:
+                day = _whole(p['dia_vencimento'], 'Dia de vencimento', 1)
+                try:
+                    due = date(int(month[:4]), int(month[5:]), day).isoformat()
+                except ValueError:
+                    raise ValueError('Dia de vencimento inválido para uma das parcelas.') from None
+                due_dates[due] = due_dates.get(due, 0) + amount
             if p['categoria'] == 'RAM':
-                ram_schedule[month] = ram_schedule.get(month, 0) + pieces[index]
+                ram_schedule[month] = ram_schedule.get(month, 0) + amount
 
     acquired = {p["categoria"] for p in bought if not p.get("monitorar_novamente", False)}
     already_owned = {cat for cat, spec in build.items() if spec.get("possui", False)}
     acquired |= already_owned
-    pending: list[str] = []
+    pending: list[str] = list(payment_warnings)
     remaining: list[dict] = []
-    remainder = {"pix": 0, "cartao": 0}
-    known = {"pix": True, "cartao": True}
+    remainder = {"pix": 0, "cartao": 0, "indefinido": 0}
+    known = {"pix": True, "cartao": True, "indefinido": True}
     category = candidate.get("categoria") if candidate else None
     if category == 'RAM' and payment != 'cartao' and build.get('RAM', {}).get('parcelamento') == 'cartao_sem_juros':
         raise ValueError('A RAM está configurada para cartão parcelado sem juros, separado da reserva à vista.')
@@ -172,9 +201,15 @@ def budget_snapshot(config: dict, purchases: list[dict], candidate: dict | None 
                               "oferta_candidata": True})
             continue
         method = spec.get("pagamento", "pix")
-        if method not in {"pix", "cartao"}:
+        if method not in {"pix", "cartao", "indefinido"}:
             raise ValueError(f"Pagamento inválido na montagem: {cat}.")
-        estimate = spec.get(f"estimativa_{method}")
+        if method == 'indefinido':
+            estimate = spec.get('estimativa_total')
+            pix_est, card_est = spec.get('estimativa_pix'), spec.get('estimativa_cartao')
+            if estimate is None and pix_est is not None and card_est is not None and cents(pix_est) == cents(card_est):
+                estimate = pix_est
+        else:
+            estimate = spec.get(f"estimativa_{method}")
         value = cents(estimate) if estimate is not None else None
         if value is None:
             known[method] = False
@@ -186,10 +221,33 @@ def budget_snapshot(config: dict, purchases: list[dict], candidate: dict | None 
                           "oferta_candidata": False})
 
     cash_after = None if cash is None else cash - spent - extra_pix
-    credit_after = credit - outstanding - extra_card
-    unknown = cash is None or total_cap is None or not all(known.values()) or bool(candidate and candidate_price is None)
-    lower_bound = all_paid + (candidate_price or 0) + sum(remainder.values())
-    limits_exceeded = (cash_after is not None and cash_after < remainder["pix"]) or credit_after < remainder["cartao"]
+    credit_after = None if credit is None or not card_amounts_known else credit - outstanding - extra_card
+    unallocated = any(item['pagamento'] == 'indefinido' for item in remaining)
+    unknown = cash is None or credit is None or not card_amounts_known or total_cap is None or not all(known.values()) or unallocated or bool(candidate and candidate_price is None)
+    finance_items = limits.get('financiamentos', [])
+    if not isinstance(finance_items, list):
+        raise ValueError('Financiamentos precisam estar em uma lista.')
+    finance_cost, finance_paid = 0, 0
+    for item in finance_items:
+        if not isinstance(item, dict):
+            raise ValueError('Financiamento inválido.')
+        if item.get('status') == 'contratado' and item.get('confirmado') is True:
+            principal = _whole(item.get('valor_centavos'), 'Valor do financiamento', 1)
+            total = _whole(item.get('total_centavos'), 'Total do financiamento', 1)
+            charges = _whole(item.get('encargos_centavos'), 'Encargos do financiamento')
+            if total - principal != charges:
+                raise ValueError('Encargos do financiamento não correspondem ao valor contratado.')
+            finance_cost += charges
+            paid = item.get('encargos_pagos_centavos')
+            if paid is None:
+                finance_paid = None
+            elif finance_paid is not None:
+                paid = _whole(paid, 'Encargos pagos')
+                if paid > charges:
+                    raise ValueError('Encargos pagos excedem o total contratado.')
+                finance_paid += paid
+    lower_bound = all_paid + finance_cost + (candidate_price or 0) + sum(remainder.values())
+    limits_exceeded = (cash_after is not None and cash_after < remainder["pix"]) or (credit_after is not None and credit_after < remainder["cartao"])
     cap_exceeded = total_cap is not None and lower_bound > total_cap
     impossible = limits_exceeded or cap_exceeded
     viable = False if impossible or candidate_redundant else (None if unknown else True)
@@ -199,6 +257,10 @@ def budget_snapshot(config: dict, purchases: list[dict], candidate: dict | None 
         pending.append("Projeção da montagem, incluindo estimativas, excede o teto total configurado; pagar parcelas não aumenta esse teto.")
     if cash is None:
         pending.append("Saldo disponível no PIX não informado; previsão de receitas não é dinheiro disponível.")
+    if credit is None:
+        pending.append('Limite do cartão não informado.')
+    if unallocated:
+        pending.append('Forma de pagamento de peça pendente não definida; não foi debitada automaticamente do PIX ou cartão.')
     if build.get('RAM', {}).get('fonte_pagamento') == 'renda_pessoal_separada':
         pending.append('Parcelas da RAM usam renda pessoal separada; saldo dessa renda não foi informado.')
     if candidate and category not in build:
@@ -207,32 +269,38 @@ def budget_snapshot(config: dict, purchases: list[dict], candidate: dict | None 
     return {
         "pix_inicial_centavos": cash, "cartao_inicial_centavos": credit,
         "teto_total_centavos": total_cap,
-        "saldo_teto_centavos": None if total_cap is None else total_cap - all_paid,
-        "saldo_previsto_restante_centavos": None if limits.get('previsto_total') is None else cents(limits['previsto_total']) - all_paid,
+        "saldo_teto_centavos": None if total_cap is None else total_cap - all_paid - finance_cost,
+        "saldo_previsto_restante_centavos": None if limits.get('previsto_total') is None else cents(limits['previsto_total']) - all_paid - finance_cost,
         "reserva_avista_prevista_centavos": None if limits.get('previsto_avista') is None else cents(limits['previsto_avista']) - spent,
         "fonte_pagamento_ram": build.get('RAM', {}).get('fonte_pagamento'),
         "entradas_pendentes": limits.get('entradas_pendentes', []),
         "entradas_confirmadas": limits.get('entradas_confirmadas', []),
-        "saldo_teto_apos_centavos": None if total_cap is None or (candidate and candidate_price is None) else total_cap - all_paid - (candidate_price or 0),
+        "financiamentos": finance_items, "custos_financeiros_contratados_centavos": finance_cost,
+        "saldo_teto_apos_centavos": None if total_cap is None or (candidate and candidate_price is None) else total_cap - all_paid - finance_cost - (candidate_price or 0),
         "folga_teto_centavos": None if total_cap is None or not all(known.values()) or (candidate and candidate_price is None) else total_cap - lower_bound,
         "total_minimo_projetado_centavos": lower_bound,
         "gasto_pix_centavos": spent_pix, "gasto_avista_sem_meio_centavos": spent_other_cash,
-        "total_pago_avista_centavos": spent, "cartao_comprometido_centavos": outstanding,
-        "cartao_pago_centavos": paid_card, "despesas_pagas_centavos": spent + paid_card,
-        "despesas_contratadas_centavos": all_paid, "total_comprado_centavos": all_paid,
+        "total_pago_avista_centavos": spent, "cartao_comprometido_centavos": outstanding if card_amounts_known else None,
+        "cartao_pago_centavos": paid_card if card_amounts_known else None,
+        "despesas_pagas_centavos": None if finance_paid is None or not card_amounts_known else spent + paid_card + finance_paid,
+        "despesas_contratadas_centavos": all_paid + finance_cost, "total_comprado_centavos": all_paid,
+        "total_comprometido_centavos": all_paid + finance_cost,
         "saldo_pix_centavos": None if cash is None or spent_other_cash else cash - spent,
         "saldo_disponivel_avista_centavos": None if cash is None else cash - spent,
-        "limite_cartao_centavos": credit - outstanding,
+        "limite_cartao_centavos": None if credit is None or not card_amounts_known else credit - outstanding,
         "saldo_pix_apos_centavos": None if spent_other_cash or (candidate and payment == "pix" and candidate_price is None) else cash_after,
         "limite_cartao_apos_centavos": None if candidate and payment == "cartao" and candidate_price is None else credit_after,
         "restante_pix_centavos": remainder["pix"] if known["pix"] else None,
         "restante_cartao_centavos": remainder["cartao"] if known["cartao"] else None,
+        "restante_pagamento_indefinido_centavos": remainder['indefinido'] if known['indefinido'] else None,
         "total_projetado_centavos": projected,
-        "projecao_total_avista_centavos": None if not known['pix'] or (candidate and payment == 'pix' and candidate_price is None) else spent + extra_pix + remainder['pix'],
-        "projecao_total_cartao_centavos": None if not known['cartao'] or (candidate and payment == 'cartao' and candidate_price is None) else sum(p['total_centavos'] for p in bought if p['pagamento'] == 'cartao') + extra_card + remainder['cartao'],
-        "folga_pix_centavos": cash_after - remainder["pix"] if not spent_other_cash and cash_after is not None and known["pix"] and not (candidate and payment == "pix" and candidate_price is None) else None,
-        "folga_cartao_centavos": credit_after - remainder["cartao"] if known["cartao"] and not (candidate and payment == "cartao" and candidate_price is None) else None,
+        "projecao_total_avista_centavos": None if unallocated or not known['pix'] or (candidate and payment == 'pix' and candidate_price is None) else spent + extra_pix + remainder['pix'],
+        "projecao_total_cartao_centavos": None if unallocated or not known['cartao'] or (candidate and payment == 'cartao' and candidate_price is None) else sum(p['total_centavos'] for p in bought if p['pagamento'] == 'cartao') + extra_card + remainder['cartao'],
+        "folga_pix_centavos": cash_after - remainder["pix"] if not unallocated and not spent_other_cash and cash_after is not None and known["pix"] and not (candidate and payment == "pix" and candidate_price is None) else None,
+        "folga_cartao_centavos": credit_after - remainder["cartao"] if not unallocated and credit_after is not None and known["cartao"] and not (candidate and payment == "cartao" and candidate_price is None) else None,
         "compromissos_mensais": dict(sorted(schedule.items())), "parcelas_ram_mensais": dict(sorted(ram_schedule.items())),
+        "compromissos_por_vencimento": dict(sorted(due_dates.items())),
+        "valores_parcelas_estimados": any(p.get('rateio_estimado') and p['pagamento'] == 'cartao' and p['parcelas_pagas'] < p['parcelas'] for p in bought),
         "compras": bought, "faltantes": remaining, "ja_possui": sorted(acquired),
         "pendencias": pending, "conclusao_viavel": viable,
         "estimativas": True,
@@ -300,6 +368,33 @@ def _compatibility(offer: dict, config: dict, purchases: list[dict] | None = Non
         conflicts.append("Formato da placa-mãe não é suportado pelo gabinete selecionado.")
     if case.get('formato_fonte') and psu.get('formato') and label(case['formato_fonte']) != label(psu['formato']):
         conflicts.append('Formato da fonte não é suportado pelo gabinete selecionado.')
+    if category == 'PLACA-MAE' and re.search(r'9800\s*x3d', selected.get('CPU', ''), re.I):
+        supported = board.get('suporte_9800x3d')
+        if supported is False:
+            conflicts.append('Placa-mãe marcada como sem suporte ao Ryzen 7 9800X3D.')
+        elif supported is not True or not board.get('fonte_suporte_9800x3d'):
+            warnings.append('Confirme o suporte oficial ao Ryzen 7 9800X3D na lista do fabricante.')
+        minimum = board.get('bios_minima_9800x3d')
+        installed = board.get('bios_instalada')
+        if not minimum:
+            warnings.append('Versão mínima de BIOS para o Ryzen 7 9800X3D não informada; consulte o fabricante.')
+        if not installed:
+            warnings.append('Versão de BIOS instalada não informada; confirme antes da compra.')
+        elif board.get('bios_9800x3d_confirmada') is not True:
+            warnings.append('Confirme que a BIOS instalada suporta o Ryzen 7 9800X3D.')
+        if board.get('vrm_adequado_9800x3d') is False:
+            conflicts.append('VRM da placa-mãe marcado como inadequado ao Ryzen 7 9800X3D.')
+        elif board.get('vrm_adequado_9800x3d') is not True:
+            warnings.append('Confirme a adequação do VRM ao Ryzen 7 9800X3D.')
+        nvme = board.get('slots_m2_nvme')
+        if nvme == 0 or nvme is False:
+            conflicts.append('Placa-mãe sem slot M.2 NVMe informado.')
+        elif type(nvme) is not int or nvme < 1:
+            warnings.append('Confirme a existência de pelo menos um slot M.2 NVMe.')
+        if not board.get('tipo_memoria', board.get('memoria')):
+            warnings.append('Confirme suporte a DDR5 na placa-mãe.')
+        if not board.get('formato'):
+            warnings.append('Confirme o formato da placa-mãe para o gabinete Montech XR.')
     for part, field, container, limit, message in (
         (gpu, "comprimento_mm", case, "gpu_max_mm", "Comprimento da GPU excede o espaço informado do gabinete."),
         (cooler, "altura_mm", case, "cooler_max_mm", "Altura do cooler excede o espaço informado do gabinete."),
@@ -367,7 +462,8 @@ def evaluate_offer(offer: dict, config: dict, purchases: list[dict]) -> dict:
     kit = category == 'RAM' and (model == 'DDR5 2x16GB' or
         isinstance(specs, dict) and specs.get('modulos') == 2 and specs.get('capacidade_por_modulo_gb') == 16)
     build = config.get("montagem", DEFAULT_BUILD)
-    preferred = 'cartao' if category == 'RAM' else build.get(category, {}).get("pagamento", "pix")
+    ram_strict = category == 'RAM' and build.get('RAM', {}).get('parcelamento') == 'cartao_sem_juros'
+    preferred = ('cartao' if ram_strict else 'pix') if category == 'RAM' else build.get(category, {}).get("pagamento", "pix")
     if preferred not in {"pix", "cartao"}:
         raise ValueError("Forma de pagamento inválida na montagem.")
     target_raw = config.get("metas", {}).get(model, offer.get("meta"))
@@ -394,14 +490,22 @@ def evaluate_offer(offer: dict, config: dict, purchases: list[dict]) -> dict:
         raise ValueError("Percentuais de alerta devem estar entre 0 e 100.")
     if good > exceptional:
         raise ValueError("Desconto de boa promoção não pode exceder o excepcional.")
-    # RAM is exclusively evaluated on the card; never promote PIX to the card price.
-    payment = 'cartao' if category == 'RAM' else ('pix' if category == 'SSD' else preferred)
+    # The current build allows RAM à vista; older configurations may retain
+    # the user's earlier card-only policy until their migration is applied.
+    payment = ('cartao' if ram_strict else 'pix') if category == 'RAM' else ('pix' if category == 'SSD' else preferred)
+    if category == 'RAM' and not ram_strict and offer.get('pix_centavos') is None:
+        if offer.get('total_parcelado_sem_juros_centavos') is not None or offer.get('cartao_centavos') is not None:
+            payment = 'cartao'
     if category not in {'RAM', 'SSD'} and offer.get(f"{payment}_centavos") is None:
         other = "pix" if payment == "cartao" else "cartao"
         if offer.get(f"{other}_centavos") is not None:
             payment = other
-    price = (offer.get('total_parcelado_sem_juros_centavos') if category == 'RAM'
-             else offer.get(f"{payment}_centavos"))
+    if category == 'RAM' and ram_strict:
+        price = offer.get('total_parcelado_sem_juros_centavos')
+    elif category == 'RAM' and payment == 'cartao':
+        price = offer.get('total_parcelado_sem_juros_centavos') or offer.get('cartao_centavos')
+    else:
+        price = offer.get(f"{payment}_centavos")
     if price is not None:
         price = _whole(price, "Preço da oferta", 1)
     freight = offer.get('frete_centavos') if (model == 'Ryzen 7 7800X3D' and config.get('meta_7800x3d_inclui_frete')) or category == 'SSD' else None
@@ -481,22 +585,28 @@ def evaluate_offer(offer: dict, config: dict, purchases: list[dict]) -> dict:
     if category == 'RAM' and category in build and category not in budget['ja_possui'] and compatible is not False:
         interest = offer.get('parcelamento_sem_juros')
         count = offer.get('parcelas')
-        if interest is False:
+        if ram_strict and interest is False:
             classification = 'NÃO RECOMENDAR'
             reason.insert(0, 'Parcelamento com juros anunciado; RAM deve ser parcelada sem juros no cartão.')
-        elif interest is not True:
+        elif ram_strict and interest is not True:
             classification = 'VERIFICAR PARCELAMENTO'
             reason.insert(0, '⚠️ Parcelamento sem juros ainda não confirmado.')
-        elif price is None:
+        elif ram_strict and price is None:
             classification = 'VERIFICAR PREÇO NO CARTÃO'
             reason.insert(0, 'Parcelamento sem juros identificado; confirme o preço total no cartão.')
-        elif type(count) is not int or count < 2:
+        elif ram_strict and (type(count) is not int or count < 2):
             classification = 'VERIFICAR PARCELAMENTO'
             reason.insert(0, 'Parcelamento sem juros identificado; confirme o número de parcelas no cartão.')
-        if payment == 'cartao':
+        elif not ram_strict and payment == 'cartao' and interest is False:
+            classification = 'VERIFICAR PAGAMENTO'
+            reason.insert(0, 'Parcelamento com juros anunciado; confira a alternativa à vista antes de decidir.')
+        elif not ram_strict and payment == 'cartao' and interest is None and type(count) is int and count > 1:
+            classification = 'VERIFICAR PAGAMENTO'
+            reason.insert(0, 'Condições e possíveis juros do parcelamento não informados; confira também o preço à vista.')
+        if ram_strict and payment == 'cartao':
             reason.append('RAM: parcelas pagas com renda pessoal separada da reserva à vista.')
     return {"classificacao": classification, "justificativa": reason,
             "pagamento": payment, "preco_centavos": price, "total_entregue_centavos": assessed if freight is not None else None, "meta_centavos": target,
             "diferenca_centavos": delta, "diferenca_percentual": percent,
-            "orcamento": budget, "compativel": compatible,
+            "orcamento": budget, "compativel": compatible, "politica_ram": 'cartao_sem_juros' if ram_strict else 'flexivel',
             "compatibilidade": compatibility_notes, "comparacao": _comparison(offer, config, price)}

@@ -9,7 +9,8 @@ from datetime import datetime, timezone
 from finance import validate_purchase
 
 OLD_UPDATE_ID = 'montagem-confirmada-2026-11-v1'
-UPDATE_ID = 'montagem-confirmada-2026-11-v2-ram-ssd'
+PREVIOUS_UPDATE_ID = 'montagem-confirmada-2026-11-v2-ram-ssd'
+UPDATE_ID = 'montagem-confirmada-2026-11-v3-9800x3d'
 PURCHASES = [
     {'ref_confirmacao':'cooler-2026-11', 'categoria':'COOLER-CPU', 'modelo':'ARCTIC Freezer 36 A-RGB Black',
      'total_centavos':21581, 'pagamento':'pix', 'parcelas':1, 'parcelas_pagas':0,
@@ -22,6 +23,13 @@ PURCHASES = [
      'total_centavos':39505, 'pagamento':'pix', 'parcelas':1, 'parcelas_pagas':0,
      'data_compra':'2026-11-06', 'status_financeiro':'pago', 'status_compra':'COMPRADO',
      'status_entrega':'em_preparacao', 'frete_incluido':True},
+    {'ref_confirmacao':'cpu-9800x3d-2026-11-11', 'categoria':'CPU', 'modelo':'Ryzen 7 9800X3D',
+     'sku':'100-100001084WOF', 'fabricante':'AMD', 'arquitetura':'Zen 5', 'socket':'AM5',
+     'nucleos':8, 'threads':16, 'total_centavos':206002, 'pagamento':'cartao', 'parcelas':6,
+     'parcelas_pagas':0, 'primeira_parcela':'2026-12', 'dia_vencimento':10,
+     'rateio_estimado':True, 'valores_pagos_centavos':[],
+     'juros':'sem_juros', 'data_compra':'2026-11-11', 'frete_incluido':True,
+     'status_financeiro':'parcelado', 'status_compra':'COMPRADO', 'status_entrega':'não informado'},
 ]
 
 
@@ -44,14 +52,14 @@ def updated_config(config):
     if not site_confirmed and not any(site(entry) for entry in pending):
         pending.append({'descricao':'desenvolvimento de site', 'valor_centavos':500000,
                         'status':'pendente', 'incluida_no_previsto':True})
-    if previous_update not in {OLD_UPDATE_ID, UPDATE_ID}:
+    if previous_update not in {OLD_UPDATE_ID, PREVIOUS_UPDATE_ID, UPDATE_ID}:
         limits.update(pix=None, total_maximo=9450, previsto_total=9450)
     limits['entradas_pendentes'] = pending
     if confirmed:
         limits['entradas_confirmadas'] = confirmed
     metas = cfg.setdefault('metas', {})
     metas.setdefault('DDR5 2x16GB', 2400)
-    if previous_update not in {OLD_UPDATE_ID, UPDATE_ID}:
+    if previous_update not in {OLD_UPDATE_ID, PREVIOUS_UPDATE_ID, UPDATE_ID}:
         metas['Ryzen 7 7800X3D'] = 1750
     metas['SSD NVMe'] = 700
     cfg['meta_7800x3d_inclui_frete'] = True
@@ -63,14 +71,15 @@ def updated_config(config):
         build.setdefault(category, {})['modelo'] = model
         # Purchase ledger is the single source of truth for acquisition status.
         build[category]['possui'] = False
-    if previous_update not in {OLD_UPDATE_ID, UPDATE_ID}:
-        if 'CPU' in build: build['CPU']['estimativa_pix'] = 1750
+    if previous_update not in {OLD_UPDATE_ID, PREVIOUS_UPDATE_ID, UPDATE_ID}:
         if 'GPU' in build: build['GPU']['estimativa_pix'] = 5100
+    cpu = build.setdefault('CPU', {})
+    cpu.update(modelo='Ryzen 7 9800X3D', possui=False, pagamento='cartao',
+               estimativa_pix=None, estimativa_cartao=None)
     memory = build.setdefault('RAM', {})
-    memory.update(pagamento='cartao', fonte_pagamento='renda_pessoal_separada',
-                  parcelamento='cartao_sem_juros')
+    memory.update(pagamento='indefinido', fonte_pagamento='a_definir', parcelamento='opcional')
     ssd = build.setdefault('SSD', {})
-    if previous_update != UPDATE_ID:
+    if previous_update not in {PREVIOUS_UPDATE_ID, UPDATE_ID}:
         if ssd.get('possui', False) or not ssd.get('estimativa_pix'):
             ssd['estimativa_pix'] = 700
         if ssd.get('possui', False):
@@ -80,6 +89,8 @@ def updated_config(config):
         ssd.setdefault('estimativa_pix', 700)
     profiles=cfg.setdefault('perfis', {})
     confirmed_profiles = {
+        'Ryzen 7 9800X3D': {'socket':'AM5', 'arquitetura':'Zen 5', 'nucleos':8,
+                            'threads':16, 'sku':'100-100001084WOF', 'compativel':True},
         'ARCTIC Freezer 36 A-RGB Black': {'altura_mm':159, 'sockets':['AM5'], 'compativel':True},
         'Montech XR White': {'gpu_max_mm':420, 'cooler_max_mm':175, 'cor':'branco',
             'tipo':'Mid-Tower', 'ventoinhas_incluidas':3, 'ventoinhas_tipo':'ARGB PWM',
@@ -91,8 +102,15 @@ def updated_config(config):
         profile = profiles.setdefault(model, {})
         for key, value in facts.items():
             profile.setdefault(key, value)
-    cfg['observacao_orcamento'] = ('A previsão total inclui RAM parcelada paga com renda pessoal separada; '
-        'não representa saldo à vista disponível. Crédito não é receita. A meta do SSD é R$ 700, não preço confirmado.')
+    cfg['observacao_orcamento'] = ('CPU adquirida em 6 parcelas; nenhuma parcela é dada como paga automaticamente. '
+        'RAM, placa-mãe e SSD podem ser avaliados à vista; empréstimo apenas simulado não é saldo disponível.')
+    finance = limits.setdefault('financiamentos', [])
+    if not isinstance(finance, list):
+        raise ValueError('Financiamentos precisam estar em uma lista; confira o orçamento.')
+    if not any(isinstance(item, dict) and item.get('id') == 'simulacao-ram-placa-ssd' for item in finance):
+        finance.append({'id':'simulacao-ram-placa-ssd', 'status':'simulado', 'valor_centavos':268000,
+                        'total_centavos':333960, 'parcelas':4, 'parcela_centavos':83490,
+                        'encargos_centavos':65960})
     return cfg
 
 
@@ -106,11 +124,14 @@ def _is_same(existing, wanted):
     if existing.get('categoria') != wanted['categoria']:
         return False
     name = _norm(existing.get('modelo',''))
-    reference = {'COOLER-CPU':'arcticfreezer36', 'GABINETE':'montechxrwhite', 'FONTE':'pichaucluster850w'}[wanted['categoria']]
+    reference = {'COOLER-CPU':'arcticfreezer36', 'GABINETE':'montechxrwhite',
+                 'FONTE':'pichaucluster850w', 'CPU':'9800x3d'}[wanted['categoria']]
     identifiers = _norm(' '.join(str(existing.get(k, '')) for k in ('sku', 'referencia', 'modelo')))
     if wanted['categoria'] == 'COOLER-CPU' and 'acfre00124a' in identifiers:
         return True
     if wanted['categoria'] == 'FONTE' and 'pgcl850bk01' in identifiers:
+        return True
+    if wanted['categoria'] == 'CPU' and '100100001084wof' in identifiers:
         return True
     if wanted['categoria'] == 'GABINETE' and 'montechxr' in name:
         colour = _norm(existing.get('cor', ''))
@@ -124,7 +145,9 @@ def _is_same(existing, wanted):
 def _refresh_pending(store, cfg=None):
     """Preserve history and re-evaluate queued RAM alerts under the new policy."""
     db = store.db
-    categories = {'FONTE', 'GABINETE', 'COOLER-CPU', 'RAM'}
+    # Categorias que o usuário reativou continuam aptas a receber alertas.
+    owned = {p.get('categoria') for p in store.purchases() if not p.get('monitorar_novamente', False)}
+    categories = (owned & {'CPU', 'FONTE', 'GABINETE', 'COOLER-CPU'}) | {'RAM'}
     offers = [json.loads(row['payload']) for row in db.execute('SELECT payload FROM offers')]
     shop_items = []
     if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='shop_targets'").fetchone():
@@ -161,10 +184,18 @@ def _refresh_pending(store, cfg=None):
         if shop_match and shop_match['categoria'] == 'RAM':
             lines = payload.splitlines()
             if lines:
-                lines[0] = '🔥 LOJA — RAM — VERIFICAR PREÇO E PARCELAMENTO'
                 kit = re.search(r'\b2\s*[x×]\s*16\s*gb\b', shop_match['nome'], re.I)
                 desired = '2×16 GB' if kit else '1×16 GB'
-                lines.insert(1, f'⚠️ Parcelamento sem juros ainda não confirmado. Confirme o total no cartão e {desired}.')
+                strict = (cfg or {}).get('montagem', {}).get('RAM', {}).get('parcelamento') == 'cartao_sem_juros'
+                if not strict:
+                    lines = [line for line in lines if not line.startswith((
+                        '⚠️ Parcelamento sem juros ainda não confirmado.',
+                        'As parcelas da RAM serão pagas com renda pessoal separada',
+                        'Confira o preço à vista, as condições do cartão'))]
+                lines[0] = '🔥 LOJA — RAM — VERIFICAR PREÇO E PARCELAMENTO'
+                note = (f'⚠️ Parcelamento sem juros ainda não confirmado. Confirme o total no cartão e {desired}.'
+                        if strict else f'Confira o preço à vista, as condições do cartão e se a memória é {desired}.')
+                lines.insert(1, note)
                 db.execute("UPDATE notifications SET payload=?,updated_at=? WHERE id=? AND state='pending'",
                            ('\n'.join(lines), datetime.now(timezone.utc).isoformat(), row['id']))
                 continue
@@ -180,6 +211,7 @@ def apply_confirmed(store, config=None):
         db.execute('BEGIN IMMEDIATE')
         existing=store.purchases()
         first_update = not store.get_meta(UPDATE_ID)
+        first_legacy_update = not store.get_meta(PREVIOUS_UPDATE_ID) and first_update
         ops=[]
         for raw in PURCHASES:
             wanted=validate_purchase(raw)
@@ -188,6 +220,24 @@ def apply_confirmed(store, config=None):
                 raise ValueError('Mais de um registro possível para '+wanted['categoria']+'; confira --budget antes de atualizar.')
             if matches:
                 old=matches[0]
+                if wanted['categoria'] == 'CPU':
+                    old_paid = old.get('parcelas_pagas', 0)
+                    if old_paid and (old.get('pagamento') != 'cartao' or old.get('parcelas') != 6 or old.get('total_centavos') != wanted['total_centavos']):
+                        raise ValueError('Registro anterior da CPU tem parcelas pagas incompatíveis; confira --budget antes de atualizar.')
+                    merged = dict(old)
+                    merged.pop('id', None)
+                    if any(old.get(k) not in (None, wanted[k]) for k in ('total_centavos', 'pagamento', 'parcelas')):
+                        merged.setdefault('dados_antes_atualizacao', {k: old.get(k) for k in ('total_centavos', 'pagamento', 'parcelas', 'parcelas_pagas')})
+                    merged.update(wanted)
+                    merged['parcelas_pagas'] = old_paid if old_paid else 0
+                    if old_paid:
+                        merged['valores_pagos_centavos'] = old.get('valores_pagos_centavos')
+                    if old_paid == wanted['parcelas']:
+                        merged['status_financeiro'] = 'pago'
+                    if first_update:
+                        merged.pop('monitorar_novamente', None)
+                    ops.append(('update', old['id'], validate_purchase(merged)))
+                    continue
                 compatible_payment = (old.get('pagamento') == wanted['pagamento'] or
                                       wanted['pagamento'] == 'avista' and old.get('pagamento') == 'pix')
                 if old.get('total_centavos') != wanted['total_centavos'] or not compatible_payment:
@@ -200,7 +250,7 @@ def apply_confirmed(store, config=None):
                 for key,value in wanted.items():
                     if key == 'modelo' or key not in merged:
                         merged[key]=value
-                if first_update:
+                if first_legacy_update:
                     merged.pop('monitorar_novamente', None)
                 ops.append(('update',old['id'],merged))
             else:
@@ -212,7 +262,7 @@ def apply_confirmed(store, config=None):
                 db.execute('UPDATE purchases SET payload=? WHERE id=?',(encoded,ident))
             else:
                 db.execute('INSERT INTO purchases(payload,created_at) VALUES (?,?)',(encoded,now))
-        if first_update:
+        if first_legacy_update:
             for old in existing:
                 if old.get('categoria') in {'SSD', 'RAM'} and not old.get('monitorar_novamente', False):
                     ident = old.pop('id')
@@ -226,7 +276,7 @@ def apply_confirmed(store, config=None):
 
 def reactivate(store, category):
     """Allow upgrades without deleting purchases or assuming a refund."""
-    if category not in {'FONTE','GABINETE','COOLER-CPU'}:
+    if category not in {'CPU','FONTE','GABINETE','COOLER-CPU'}:
         raise ValueError('Categoria não suportada para reativação.')
     db=store.db
     with db:

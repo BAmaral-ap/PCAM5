@@ -28,8 +28,7 @@ class PrecoAnunciado(unittest.TestCase):
                             continue
                         self.assertEqual(len(alerts),1)
                         if category == 'RAM':
-                            self.assertIn('VERIFICAR PARCELAMENTO',alerts[0]['payload'])
-                            self.assertIn('Parcelamento sem juros ainda não confirmado', alerts[0]['payload'])
+                            self.assertIn('Confira os valores à vista',alerts[0]['payload'])
                         else:
                             self.assertIn('VERIFICAR PREÇO',alerts[0]['payload'])
                             self.assertIn('Forma avaliada: não informado',alerts[0]['payload'])

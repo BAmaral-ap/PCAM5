@@ -11,7 +11,7 @@ O arquivo `produtos_lojas.json` já contém os dois produtos informados:
 | `kabum-asrock-9070xt-challenger` | ASRock RX 9070 XT Challenger | 180 segundos | R$ 5.100 |
 | `pichau-xfx-9070xt-swift-white` | XFX RX 9070 XT Swift White | 180 segundos | R$ 5.100 |
 
-A URL da Pichau foi salva sem o parâmetro de rastreamento; a identificação do produto permanece a mesma. O Ryzen 7 7800X3D ainda precisa de um endereço direto de produto escolhido por você. A Terabyte é suportada como domínio, mas não há URL cadastrada.
+A URL da Pichau foi salva sem o parâmetro de rastreamento; a identificação do produto permanece a mesma. O processador já foi comprado e não gera alertas. A Terabyte é suportada como domínio, mas não há URL cadastrada.
 
 Situação verificada durante o desenvolvimento:
 
@@ -70,15 +70,15 @@ Adicione um objeto na lista `produtos` de `produtos_lojas.json`. Por exemplo, pr
 
 ```json
 {
-  "id": "kabum-ryzen-7800x3d",
-  "nome": "AMD Ryzen 7 7800X3D",
+  "id": "kabum-ssd-exemplo",
+  "nome": "SSD NVMe 1TB MODELO-REAL",
   "loja": "kabum",
-  "categoria": "CPU",
+  "categoria": "SSD",
   "url": "https://www.kabum.com.br/produto/ID-REAL/ENDERECO-REAL",
   "sku": "SKU-REAL",
   "sku_loja": "ID-REAL",
-  "termos_identificacao": ["AMD", "Ryzen", "7800X3D"],
-  "meta_centavos": 170000,
+  "termos_identificacao": ["NVMe", "1TB", "MODELO-REAL"],
+  "meta_centavos": 70000,
   "intervalo_segundos": 600,
   "cupons": [],
   "ativo": true

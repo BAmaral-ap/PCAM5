@@ -5,7 +5,7 @@ from finance import budget_snapshot
 
 class TotalCapTests(unittest.TestCase):
     def config(self):
-        return {'orcamento': {'pix': 10000, 'cartao': 2500}, 'montagem': {
+        return {'orcamento': {'pix': 10000, 'cartao': 2500, 'total_maximo': 12500}, 'montagem': {
             'CPU': {'modelo': 'CPU', 'estimativa_pix': 10000, 'pagamento': 'pix'},
             'RAM': {'modelo': 'RAM', 'estimativa_cartao': 2500, 'pagamento': 'cartao'},
         }}

@@ -217,8 +217,9 @@ def main(argv=None):
     actions.add_argument('--reprocess', action='store_true')
     actions.add_argument('--purchase', type=Path, help='JSON com compra já realizada; exige --confirmar')
     actions.add_argument('--pay-installment', type=int, metavar='ID', help='Registrar parcela já paga; exige --confirmar')
+    parser.add_argument('--valor-pago-centavos', type=int, help='Valor efetivamente pago em centavos para --pay-installment')
     actions.add_argument('--atualizar-montagem', action='store_true', help='Registrar compras confirmadas e atualizar orçamento; exige --confirmar')
-    actions.add_argument('--reativar-categoria', choices=['FONTE', 'GABINETE', 'COOLER-CPU'], help='Voltar a monitorar categoria adquirida; exige --confirmar')
+    actions.add_argument('--reativar-categoria', choices=['CPU', 'FONTE', 'GABINETE', 'COOLER-CPU'], help='Voltar a monitorar categoria adquirida; exige --confirmar')
     actions.add_argument('--notifications-status', action='store_true')
     actions.add_argument('--lojas', action='store_true', help='Consultar apenas lojas configuradas; --watch mantém em execução')
     actions.add_argument('--lojas-status', action='store_true', help='Mostrar últimas verificações e preços das lojas')
@@ -229,6 +230,8 @@ def main(argv=None):
         parser.error('Use --limit entre 1 e 500; --days >= 1; --interval >= 1.')
     if args.history_days is not None and args.history_days < 1:
         parser.error('--history-days deve ser positivo.')
+    if args.valor_pago_centavos is not None and (args.pay_installment is None or args.valor_pago_centavos <= 0):
+        parser.error('--valor-pago-centavos exige --pay-installment e valor positivo.')
     if (args.purchase or args.pay_installment is not None or args.atualizar_montagem or args.reativar_categoria) and not args.confirmar:
         parser.error('Registro financeiro requer confirmação explícita: --confirmar. Nenhuma compra foi registrada.')
     try:
@@ -323,7 +326,7 @@ def main(argv=None):
                     raise ValueError('Compra idêntica já registrada. Confira --budget antes de repetir.')
                 print_json({'compra_registrada': store.add_purchase(item), 'registro': item})
             elif args.pay_installment is not None:
-                store.record_installment(args.pay_installment)
+                store.record_installment(args.pay_installment, args.valor_pago_centavos)
                 print('Parcela marcada como paga por confirmação manual.')
             elif args.budget:
                 print_json({'orcamento': budget_snapshot(cfg, store.purchases()), 'compras': store.purchases()})

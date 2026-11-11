@@ -95,7 +95,7 @@ def make_notifications(store, offer, cfg, purchases, now):
     if offer.get('categoria') == 'VENTOINHA':
         return []
     category = offer.get('categoria')
-    if category in {'FONTE', 'GABINETE', 'COOLER-CPU'} and (
+    if category in {'CPU', 'FONTE', 'GABINETE', 'COOLER-CPU'} and (
         cfg.get('montagem', {}).get(category, {}).get('possui', False) or
         any(p.get('categoria') == category and not p.get('monitorar_novamente', False) for p in purchases)
     ):
@@ -118,9 +118,10 @@ def make_notifications(store, offer, cfg, purchases, now):
     if category == 'RAM':
         evaluation = evaluate_offer(offer, cfg, purchases)
         offer['avaliacao'] = evaluation['classificacao']
+        ram_strict = cfg.get('montagem', {}).get('RAM', {}).get('parcelamento') == 'cartao_sem_juros'
         if ((cfg.get('montagem') and category not in cfg['montagem'])
                 or category in evaluation['orcamento'].get('ja_possui', []) or evaluation.get('compativel') is False
-                or offer.get('parcelamento_sem_juros') is False
+                or (ram_strict and offer.get('parcelamento_sem_juros') is False)
                 or re.search(r'\b(?:so[ -]?dimm|notebook)\b', title, re.I)):
             return []
         matched_shape = re.fullmatch(r'DDR5\s+(\d+)x(\d+)GB', offer.get('peca', ''), re.I)
@@ -139,7 +140,12 @@ def make_notifications(store, offer, cfg, purchases, now):
             if type(target) is not int or target <= 0:
                 return []
             installment_total = offer.get('total_parcelado_sem_juros_centavos')
-            if type(installment_total) is int:
+            if not ram_strict:
+                candidates = (offer.get('pix_centavos'), offer.get('anunciado_centavos'),
+                              installment_total, offer.get('cartao_centavos'))
+                if not any(type(value) is int and 0 < value <= target for value in candidates):
+                    return []
+            elif type(installment_total) is int:
                 if installment_total > target:
                     return []
             else:
@@ -148,14 +154,14 @@ def make_notifications(store, offer, cfg, purchases, now):
                     offer.get('anunciado_centavos'), offer.get('pix_centavos'))
                 if not any(type(candidate) is int and 0 < candidate <= target for candidate in candidates):
                     return []
-                announced = offer.get('anunciado_centavos')
-                if (offer.get('parcelamento_sem_juros') is True and type(announced) is int
-                        and 0 < announced <= target):
-                    evaluation = dict(evaluation, classificacao='🔥 KIT DDR5 2×16 GB — VERIFICAR PREÇO',
-                        justificativa=['Preço anunciado dentro da meta; confirme o total parcelado no cartão.'] + evaluation['justificativa'])
+            announced = offer.get('anunciado_centavos')
+            if (offer.get('parcelamento_sem_juros') is True and type(announced) is int
+                    and 0 < announced <= target and evaluation.get('preco_centavos') is None):
+                evaluation = dict(evaluation, classificacao='🔥 KIT DDR5 2×16 GB — VERIFICAR PREÇO',
+                    justificativa=['Preço anunciado dentro da meta; confirme o total parcelado no cartão.'] + evaluation['justificativa'])
         if evaluation['classificacao'] == 'NÃO COMPENSA':
             evaluation = dict(evaluation, classificacao='AVALIAR PREÇO E ORÇAMENTO',
-                              justificativa=['Confira o preço total parcelado, o orçamento e a compatibilidade.'] + evaluation['justificativa'])
+                              justificativa=['Confira o preço final, o orçamento e a compatibilidade.'] + evaluation['justificativa'])
         fingerprint = notification_key(offer, evaluation)
         key = 'dedupe:' + fingerprint
         previous = store.get_meta(key)
@@ -217,7 +223,10 @@ def make_notifications(store, offer, cfg, purchases, now):
                          'date': offer['data'], 'fingerprint': key}]
             return []
         value = candidates[0]
-        label = tier(value, cfg)
+        freight = offer.get('frete_centavos')
+        delivered = value + freight if type(freight) is int and freight >= 0 else None
+        classified = delivered if delivered is not None else value
+        label = tier(classified, cfg)
         offer['classificacao_preliminar'] = label
         if label == 'PREÇO ALTO':
             return []
@@ -229,6 +238,8 @@ def make_notifications(store, offer, cfg, purchases, now):
             plan = f'{count}x sem juros' if type(count) is int else 'Parcelamento sem juros'
             qualifier = 'identificado como cartão' if offer.get('parcelamento_cartao_inferido') else 'no cartão anunciado'
             installment = f'{plan}: {qualifier}; confirme o total no checkout.\n'
+        delivery = (f'Frete para Belém anunciado: {money(freight)}\nTotal estimado com frete: {money(delivered)}\n'
+                    if delivered is not None else '')
         compatibility = ''
         profiles = cfg.get('perfis', {})
         owned = {p.get('categoria'): profiles.get(p.get('modelo'), {}) for p in purchases
@@ -250,15 +261,16 @@ def make_notifications(store, offer, cfg, purchases, now):
                    f"Modelo anunciado: {offer.get('nome_completo') or offer['peca']}\n"
                    f"Preço anunciado: {money(value)}\n"
                    f"Pagamento e frete: confirme no checkout\n"
+                   f"{delivery}"
                    f"{installment}"
                    f"Loja: {offer.get('loja') or 'não informada'}\n"
                    f"Cupom: {offer.get('cupom') or 'não informado'}\n"
                    f"Origem: @{offer['canal']}\nMeta: {money(meta)}\n"
-                   f"Diferença da meta: {money(value-meta)}\n"
+                   f"Diferença da meta: {money(classified-meta)}\n"
                    f"{compatibility}"
                    f"⚠️ Preço preliminar; confirme estoque, cupom e frete antes de comprar.\n"
                    f"{link}\nOrigem: {offer['link']}")
-        fingerprint = notification_key(offer, {'preco_centavos': value, 'pagamento': 'anunciado'})
+        fingerprint = notification_key(offer, {'preco_centavos': classified, 'pagamento': 'anunciado'})
         key = 'dedupe:' + fingerprint
         previous = store.get_meta(key)
         if previous and now - timestamp(previous) < timedelta(hours=cfg.get('deduplicacao_horas', 24)):

@@ -394,7 +394,29 @@ class SchedulerTests(unittest.IsolatedAsyncioTestCase):
         payload = self.store.pending_notifications()[0]['payload']
         self.assertIn('Meta: R$ 2.400,00', payload)
         self.assertIn('2×16 GB', payload)
-        self.assertIn('Parcelamento sem juros ainda não confirmado', payload)
+        self.assertIn('Confira o preço à vista', payload)
+    async def test_cpu_purchase_suppresses_shop_alert_and_can_be_reactivated(self):
+        from inventario import PURCHASES, reactivate
+        cpu = deepcopy(ITEM)
+        cpu.update(id='test-cpu', nome='AMD Ryzen 7 9800X3D', categoria='CPU', familia='Ryzen',
+                   termos_identificacao=['Ryzen', '9800X3D'], meta_centavos=200000)
+        self.store.add_purchase(PURCHASES[3])
+        price = ['1800']
+        def fetch(url):
+            if url.endswith('/robots.txt'):
+                return Response(200, ROBOTS, 'text/plain')
+            return Response(200, html(price[0], product_name=cpu['nome']), 'text/html')
+        catalog = {'lojas': {'kabum': {'termos_verificados': True}}, 'produtos': [cpu]}
+        monitor = ShopMonitor(self.store, catalog, [cpu], {}, fetch=fetch, now=self.clock.now,
+                              sleep=self.clock.sleep, jitter=lambda:0)
+        await monitor.check_due()
+        self.assertEqual(self.store.pending_notifications(), [])
+        self.assertEqual(len(monitor.tracking.history(cpu)), 1)
+        reactivate(self.store, 'CPU')
+        price[0] = '1600'
+        self.clock.t += 180
+        await monitor.check_due()
+        self.assertEqual(len(self.store.pending_notifications()), 1)
     async def test_shop_alert_does_not_wait_for_gemini(self):
         from runtime import deliver_pending
         class Bot:

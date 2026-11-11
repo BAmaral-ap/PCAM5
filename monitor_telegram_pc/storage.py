@@ -251,7 +251,7 @@ class Store:
     def purchases(self) -> list[dict]:
         return [dict(json.loads(r["payload"]), id=r["id"]) for r in self.db.execute("SELECT * FROM purchases ORDER BY id")]
 
-    def record_installment(self, purchase_id: int) -> dict:
+    def record_installment(self, purchase_id: int, paid_centavos: int | None = None) -> dict:
         """Confirma manualmente uma parcela; passagem do tempo não libera limite."""
         with self.db:
             # Acquire the writer lock before reading so concurrent confirmations
@@ -263,7 +263,24 @@ class Store:
             item = json.loads(row[0])
             if item["pagamento"] != "cartao" or item["parcelas_pagas"] >= item["parcelas"]:
                 raise ValueError("Esta compra não possui parcela de cartão pendente.")
+            if item.get('rateio_estimado'):
+                previous = item.get('valores_pagos_centavos')
+                if not isinstance(previous, list) or len(previous) != item['parcelas_pagas']:
+                    raise ValueError('Valores das parcelas anteriores precisam ser conferidos antes de registrar outra.')
+                if type(paid_centavos) is not int or paid_centavos <= 0:
+                    raise ValueError('Informe o valor real da parcela em centavos com --valor-pago-centavos.')
+                remaining = item['total_centavos'] - sum(previous)
+                last = item['parcelas_pagas'] + 1 == item['parcelas']
+                if paid_centavos > remaining or (last and paid_centavos != remaining) or (not last and paid_centavos >= remaining):
+                    raise ValueError('Valor da parcela é incompatível com o total restante da compra.')
+                item['valores_pagos_centavos'].append(paid_centavos)
+            elif paid_centavos is not None:
+                from finance import installments
+                if paid_centavos != installments(item['total_centavos'], item['parcelas'])[item['parcelas_pagas']]:
+                    raise ValueError('Valor informado difere do rateio registrado; confira a compra.')
             item["parcelas_pagas"] += 1
+            if item.get('rateio_estimado') and item['parcelas_pagas'] == item['parcelas']:
+                item['status_financeiro'] = 'pago'
             self.db.execute("UPDATE purchases SET payload=? WHERE id=?", (_json(item), purchase_id))
         return dict(item, id=purchase_id)
 

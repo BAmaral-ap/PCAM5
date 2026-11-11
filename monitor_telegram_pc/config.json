@@ -25,6 +25,17 @@
         "status": "pendente",
         "incluida_no_previsto": true
       }
+    ],
+    "financiamentos": [
+      {
+        "id": "simulacao-ram-placa-ssd",
+        "status": "simulado",
+        "valor_centavos": 268000,
+        "total_centavos": 333960,
+        "parcelas": 4,
+        "parcela_centavos": 83490,
+        "encargos_centavos": 65960
+      }
     ]
   },
   "alertas": {
@@ -56,10 +67,10 @@
   },
   "montagem": {
     "CPU": {
-      "modelo": "Ryzen 7 7800X3D",
-      "estimativa_pix": 1750,
+      "modelo": "Ryzen 7 9800X3D",
+      "estimativa_pix": null,
       "estimativa_cartao": null,
-      "pagamento": "pix",
+      "pagamento": "cartao",
       "possui": false
     },
     "GPU": {
@@ -80,10 +91,10 @@
       "modelo": "DDR5 1x16GB",
       "estimativa_pix": 1500,
       "estimativa_cartao": 1500,
-      "pagamento": "cartao",
+      "pagamento": "indefinido",
       "possui": false,
-      "fonte_pagamento": "renda_pessoal_separada",
-      "parcelamento": "cartao_sem_juros"
+      "fonte_pagamento": "a_definir",
+      "parcelamento": "opcional"
     },
     "FONTE": {
       "modelo": "Pichau Cluster 850W PG-CL850-BK01",
@@ -124,7 +135,12 @@
     },
     "Ryzen 7 9800X3D": {
       "compativel": true,
-      "observacao": "Plataforma prevista; ainda exige confirmação manual de BIOS, dimensões, memória e conectores."
+      "observacao": "Plataforma prevista; ainda exige confirmação manual de BIOS, dimensões, memória e conectores.",
+      "socket": "AM5",
+      "arquitetura": "Zen 5",
+      "nucleos": 8,
+      "threads": 16,
+      "sku": "100-100001084WOF"
     },
     "RX 9070 XT 16GB": {
       "compativel": true,
@@ -187,7 +203,7 @@
       "compativel": true
     }
   },
-  "observacao_orcamento": "A previsão total inclui RAM parcelada paga com renda pessoal separada; não representa saldo à vista disponível. Crédito não é receita. A meta do SSD é R$ 700, não preço confirmado.",
+  "observacao_orcamento": "CPU adquirida em 6 parcelas; nenhuma parcela é dada como paga automaticamente. RAM, placa-mãe e SSD podem ser avaliados à vista; empréstimo apenas simulado não é saldo disponível.",
   "gemini": {
     "ativado": true,
     "modelo": "gemini-3.5-flash-lite",
@@ -201,5 +217,5 @@
   },
   "meta_7800x3d_inclui_frete": true,
   "alertar_orcamento_incerto": true,
-  "pcam5_atualizacao_montagem": "montagem-confirmada-2026-11-v2-ram-ssd"
+  "pcam5_atualizacao_montagem": "montagem-confirmada-2026-11-v3-9800x3d"
 }

@@ -31,14 +31,14 @@ O intervalo padrão é de 2 minutos. O notebook precisa estar ligado, conectado 
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-Metas, canais e estimativas ficam em `config.json`. A atualização registra três compras (R$ 927,98), mantém o SSD NVMe como pendente e monitora RAM de 1×16 GB ou kits de 2×16 GB até R$ 2.400 no cartão parcelado sem juros, pago com renda pessoal separada. A referência global anterior de R$ 9.450 e seu saldo previsto de R$ 8.522,02 não representam dinheiro disponível à vista. No computador que contém o banco existente, pare o monitor e execute:
+Metas, canais e estimativas ficam em `config.json`. A atualização registra quatro compras, que somam R$ 2.988,00: cooler, gabinete e fonte pagos à vista (R$ 927,98), mais Ryzen 7 9800X3D (R$ 2.060,02 no cartão em seis parcelas). A primeira vence em 10/12/2026; as demais, no dia 10 dos meses seguintes. Os valores de cada parcela são estimativas até conferência da fatura. Permanecem pendentes GPU, placa-mãe, RAM e SSD. O saldo de R$ 6.462,00 da referência prevista de R$ 9.450 não é dinheiro disponível confirmado. No computador que contém o banco existente, pare o monitor e execute:
 
 ```powershell
 .\.venv\Scripts\python.exe monitor.py --atualizar-montagem --confirmar
 .\.venv\Scripts\python.exe monitor.py --budget
 ```
 
-O cadastro reconhece o cooler já registrado e não duplica as compras ao ser repetido. Confira o [guia](monitor_telegram_pc/LEIA-ME.md) para reativar alertas e interpretar as estimativas.
+O cadastro reconhece as compras anteriores e não as duplica ao ser repetido. Confira o [guia](monitor_telegram_pc/LEIA-ME.md) para registrar parcelas efetivamente pagas, reativar alertas e interpretar as estimativas.
 
 ## Segurança da sessão
 
