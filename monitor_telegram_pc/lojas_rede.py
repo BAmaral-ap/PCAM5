@@ -13,6 +13,13 @@ USER_AGENT = 'PCAM5Monitor/1.0'
 DOMAINS = {
     'kabum': {'kabum.com.br', 'www.kabum.com.br'},
     'pichau': {'pichau.com.br', 'www.pichau.com.br'},
+    'gk': {'gkinfostore.com.br', 'www.gkinfostore.com.br'},
+    'patoloco': {'patoloco.com.br', 'www.patoloco.com.br'},
+    'waz': {'waz.com.br', 'www.waz.com.br'},
+    'amazon': {'amazon.com.br', 'www.amazon.com.br'},
+    'mercadolivre': {'mercadolivre.com.br', 'www.mercadolivre.com.br', 'produto.mercadolivre.com.br'},
+    'magalu': {'magazineluiza.com.br', 'www.magazineluiza.com.br'},
+    'casasbahia': {'casasbahia.com.br', 'www.casasbahia.com.br'},
     'terabyte': {'terabyteshop.com.br', 'www.terabyteshop.com.br'},
 }
 TRACKING = {'affiliated_code', 'aff', 'affiliate', 'tag', 'ref', 'gclid', 'fbclid'}
@@ -218,7 +225,7 @@ def validate_catalog(catalog):
         terms = item['termos_identificacao']
         if not isinstance(terms, list) or not terms or not all(isinstance(t, str) and re.fullmatch(r'[A-Za-z0-9+ ._-]{2,80}', t) for t in terms):
             raise ValueError('termos_identificacao deve conter termos simples de modelo')
-        if item['categoria'] not in {'GPU', 'CPU', 'FONTE', 'PLACA-MAE', 'RAM', 'COOLER-CPU', 'GABINETE'}:
+        if item['categoria'] not in {'GPU', 'CPU', 'FONTE', 'PLACA-MAE', 'RAM', 'COOLER-CPU', 'GABINETE', 'SSD'}:
             raise ValueError('Categoria de produto não suportada')
         if not compatible_target(item['categoria'], item['nome']):
             raise ValueError('Cadastre apenas fontes 850 W e placas-mãe identificadas como AM5.')

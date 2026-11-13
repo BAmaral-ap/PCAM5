@@ -198,6 +198,9 @@ def make_notifications(store, offer, cfg, purchases, now):
         return [{'key': fingerprint + ':' + offer['link'], 'payload': format_alert(offer, evaluation),
                  'date': offer['data'], 'fingerprint': key}]
     if offer.get('peca') == 'RX 9070 XT 16GB':
+        from produtos_validacao import valid_gpu
+        if not valid_gpu(offer.get('nome_completo') or offer['peca']):
+            return []
         from rx9070 import price_candidates, tier
         from notifications import money
         candidates = price_candidates(offer.get('texto', ''))

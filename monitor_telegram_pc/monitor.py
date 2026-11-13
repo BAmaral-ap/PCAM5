@@ -196,6 +196,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--config', type=Path, default=HERE / 'config.json')
     parser.add_argument('--db', type=Path, default=HERE / 'dados' / 'monitor.sqlite3')
+    parser.add_argument('--descobrir', action='store_true', help='Ativar descoberta nesta execução, preservando o config local')
     parser.add_argument('--watch', action='store_true')
     parser.add_argument('--limit', type=int, default=150, help='Tamanho da página de mensagens (1 a 500)')
     parser.add_argument('--days', type=int, default=7, help='Janela do histórico inicial; sem alertas retroativos')
@@ -222,6 +223,7 @@ def main(argv=None):
     actions.add_argument('--reativar-categoria', choices=['CPU', 'FONTE', 'GABINETE', 'COOLER-CPU'], help='Voltar a monitorar categoria adquirida; exige --confirmar')
     actions.add_argument('--notifications-status', action='store_true')
     actions.add_argument('--lojas', action='store_true', help='Consultar apenas lojas configuradas; --watch mantém em execução')
+    actions.add_argument('--descoberta-status', action='store_true', help='Diagnóstico das fontes e URLs descobertas')
     actions.add_argument('--lojas-status', action='store_true', help='Mostrar últimas verificações e preços das lojas')
     actions.add_argument('--lojas-historico', metavar='ID', help='Mostrar histórico de um produto de loja')
     parser.add_argument('--confirmar', action='store_true', help='Confirma manualmente registro financeiro local')
@@ -236,6 +238,8 @@ def main(argv=None):
         parser.error('Registro financeiro requer confirmação explícita: --confirmar. Nenhuma compra foi registrada.')
     try:
         cfg = load_config(args.config)
+        if args.descobrir:
+            cfg.setdefault('descoberta', {})['ativado'] = True
         if args.dry_run:
             print(demo(cfg))
             return
@@ -348,15 +352,17 @@ def main(argv=None):
             elif args.notifications_status:
                 print_json({'contagens': dict(Counter(n['state'] for n in store.notifications())),
                             'envios': [{'id': n['id'], 'estado': n['state'], 'data': n['source_date']} for n in store.notifications()]})
-            elif args.lojas_status or args.lojas_historico:
+            elif args.lojas_status or args.lojas_historico or args.descoberta_status:
                 shops = shop_monitor(store, cfg, required=True)
-                if args.lojas_status:
+                if args.descoberta_status:
+                    print_json(shops.discovery.report())
+                elif args.lojas_status:
                     print_json(shops.tracking.status(shops.items))
                 else:
                     item = next((p for p in shops.items if p['id'] == args.lojas_historico), None)
                     if item is None:
                         raise ValueError('ID de produto não encontrado no catálogo de lojas.')
-                    print_json(shops.tracking.history(item))
+                    print_json({'historico': shops.tracking.history(item), 'estatisticas': shops.tracking.statistics(item, shops.now())})
             elif args.lojas:
                 setup_logging(HERE / 'logs')
                 asyncio.run(shops_only(args, cfg, store))

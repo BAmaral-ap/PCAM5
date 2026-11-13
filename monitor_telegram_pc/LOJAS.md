@@ -1,5 +1,7 @@
 # Monitoramento direto de lojas
 
+A descoberta automática de URLs, fontes adicionais e suas limitações estão documentadas em [DESCOBERTA.md](DESCOBERTA.md).
+
 O monitor de lojas acompanha URLs específicas em paralelo ao Telegram. A versão inicial aceita **dados públicos em JSON-LD Schema.org** que correspondam ao produto configurado. Ela não compra produtos, não entra em contas, não segue redirecionamentos e não contorna CAPTCHA ou bloqueios.
 
 ## Antes de ativar

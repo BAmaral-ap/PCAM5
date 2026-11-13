@@ -217,5 +217,30 @@
   },
   "meta_7800x3d_inclui_frete": true,
   "alertar_orcamento_incerto": true,
-  "pcam5_atualizacao_montagem": "montagem-confirmada-2026-11-v3-9800x3d"
+  "pcam5_atualizacao_montagem": "montagem-confirmada-2026-11-v3-9800x3d",
+  "descoberta": {
+    "ativado": true,
+    "intervalo_produto_segundos": 1200,
+    "destino": {
+      "cidade": "Belém",
+      "uf": "PA",
+      "cep": null
+    },
+    "fontes": [
+      {
+        "id": "brave",
+        "tipo": "brave",
+        "ativado": false,
+        "custos_autorizados": false,
+        "intervalo_segundos": 7200
+      },
+      {
+        "id": "google",
+        "tipo": "google_cse",
+        "ativado": false,
+        "custos_autorizados": false,
+        "intervalo_segundos": 7200
+      }
+    ]
+  }
 }

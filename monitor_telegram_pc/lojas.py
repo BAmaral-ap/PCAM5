@@ -27,6 +27,8 @@ def load_catalog(path):
         catalog = json.loads(path.read_text(encoding='utf-8-sig'))
     except (ValueError, OSError):
         raise ValueError('Arquivo de produtos das lojas inválido.') from None
+    from descoberta import register_domains
+    register_domains(catalog)
     items = [item for item in validate_catalog(catalog) if item.get('ativo', True)]
     policies = catalog.get('lojas', {})
     if not isinstance(policies, dict):
@@ -49,6 +51,8 @@ class ShopMonitor:
         self.locks = {}
         self.event = asyncio.Event()
         self.tracking.sync(items)
+        from descoberta import Discovery
+        self.discovery = Discovery(self)
         # A reviewed policy is a meaningful state change: do not leave the
         # product waiting an hour from the earlier "unverified terms" result.
         for item in items:
@@ -60,6 +64,7 @@ class ShopMonitor:
 
     def prioritize_message(self, text):
         """Only exact configured direct links; never resolve untrusted short URLs."""
+        self.discovery.telegram(text or '')
         urls = URL_RE.findall(text or '')
         coupon = extract_coupon(text or '')
         current = self.now()
@@ -226,7 +231,7 @@ class ShopMonitor:
 
     async def check_due(self):
         # Each store gets a single lock; independent stores may run concurrently.
-        await asyncio.gather(*(self.check(item) for item in self.items))
+        await asyncio.gather(self.discovery.tick(), *(self.check(item) for item in list(self.items)))
 
     async def run(self, watch=False, flush=None):
         while True:

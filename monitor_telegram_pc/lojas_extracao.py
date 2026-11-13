@@ -83,6 +83,10 @@ def _same_product(node, target):
         return False
     if not compatible_target(target['categoria'], name):
         return False
+    if target.get('familia') == 'RX 9070 XT':
+        from produtos_validacao import valid_gpu
+        if not valid_gpu(name):
+            return False
     compact = _norm(name)
     if not all(_norm(term) in compact for term in target['termos_identificacao']):
         return False
@@ -217,6 +221,10 @@ def extract_public_offer(html, target):
                         continue
                 except ValueError:
                     continue
+            if target.get('familia') == 'RX 9070 XT':
+                conditions = [product.get('itemCondition'), offer.get('itemCondition')]
+                if any(c and not str(c).endswith('/NewCondition') for c in conditions):
+                    continue
             price_sets = _prices(offer)
             if any(len(v) > 1 for v in price_sets.values()):
                 raise ExtractionError('Preços conflitantes nos dados estruturados')
@@ -230,7 +238,13 @@ def extract_public_offer(html, target):
     if len(unique) != 1:
         raise ExtractionError('Preço ausente ou múltiplas ofertas/vendedores ambíguos')
     prices, stock, seller, shipping = unique[0]
+    condition_values = [p.get('itemCondition') for p in products]
+    for p in products:
+        offers = p.get('offers', [])
+        if isinstance(offers, dict): offers = [offers]
+        condition_values.extend(o.get('itemCondition') for o in offers if isinstance(o, dict))
     return {
+        'condicao': 'novo' if any(str(c).endswith('/NewCondition') for c in condition_values if c) else 'não informada',
         'status': ('produto_esgotado' if stock == 'esgotado' else
                    'preco_publico' if any(prices.values()) else 'preco_nao_encontrado'),
         'preco_publico_centavos': prices['publico'],

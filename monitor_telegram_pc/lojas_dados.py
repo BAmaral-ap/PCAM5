@@ -34,8 +34,12 @@ def _price_fields(offer):
 def _event(previous, current, target, reduction):
     if current['status'] == 'produto_esgotado':
         return None
-    old = _price_fields(previous or {})
-    new = _price_fields(current)
+    def effective(data):
+        shipping = data.get('frete_centavos')
+        return {key: value + shipping if value is not None and type(shipping) is int else value
+                for key, value in _price_fields(data).items()}
+    old = effective(previous or {})
+    new = effective(current)
     below_target = any(value is not None and value <= target['meta_centavos'] for value in new.values())
     prior_below_target = any(value is not None and value <= target['meta_centavos'] for value in old.values())
     decreased = any(old[k] is not None and new[k] is not None and new[k] < old[k] for k in new)
@@ -47,9 +51,11 @@ def _event(previous, current, target, reduction):
                       previous['vendedor'] != current['vendedor'])
     if restocked and (below_target or not any(value is not None for value in new.values())):
         return 'PRODUTO VOLTOU AO ESTOQUE'
+    if target.get('descoberto') and prior_below_target and not below_target and any(v is not None for v in new.values()):
+        return 'PROMOÇÃO ENCERRADA'
     if significant:
         return 'QUEDA DE PREÇO DETECTADA'
-    if below_target and (not previous or not prior_below_target or decreased):
+    if below_target and (not previous or not prior_below_target or (decreased and not target.get('descoberto'))):
         return 'PREÇO DENTRO DA META'
     if below_target and seller_changed:
         return 'VENDEDOR ALTERADO'
@@ -65,6 +71,8 @@ def _message(item, current, previous, event, observed, hint, cfg, purchases=()):
               ('Preço cartão', 'preco_cartao_centavos')]
     display_event = 'RAM — VERIFICAR PREÇO E PARCELAMENTO' if item.get('categoria') == 'RAM' else event
     lines = [f"🔥 LOJA — {display_event}", f"Produto: {item['nome']}", f"Loja: {item['loja']}"]
+    if item.get('descoberto'):
+        lines.append('Oferta preliminar: condição '+current.get('condicao', 'não informada')+'; confira vendedor, garantia e reputação antes de comprar.')
     if item.get('categoria') == 'RAM':
         kit = re.search(r'\b2\s*[x×]\s*16\s*gb\b', item['nome'], re.I)
         desired = '2×16 GB' if kit else '1×16 GB'
@@ -279,3 +287,18 @@ class StoreTracking:
             WHERE target_key=? ORDER BY checked_at DESC,id DESC LIMIT ?''', (key_for(item), limit))
         return [{'verificado_em': _utc(row['checked_at']), 'status': row['status'],
                  'detalhe': row['detail'], 'observacao': json.loads(row['data']) if row['data'] else None} for row in rows]
+
+    def statistics(self, item, now):
+        rows = self.db.execute("SELECT checked_at,data FROM shop_checks WHERE target_key=? AND data IS NOT NULL ORDER BY checked_at", (key_for(item),)).fetchall()
+        result = {}
+        for field in ('preco_publico_centavos', 'preco_pix_centavos', 'preco_cartao_centavos'):
+            samples = [(row['checked_at'], json.loads(row['data']).get(field)) for row in rows]
+            samples = [(t, value) for t, value in samples if type(value) is int and value > 0]
+            entry = {'menor_observado_centavos': min((v for _, v in samples), default=None)}
+            for days in (7, 30):
+                window = [(t, v) for t, v in samples if now-days*86400 <= t <= now]
+                entry[str(days)+'_dias'] = {'amostras': len(window),
+                    'cobertura_segundos': window[-1][0]-window[0][0] if window else 0,
+                    'media_centavos': round(sum(v for _, v in window)/len(window)) if len({int(t//86400) for t, _ in window}) >= 2 else None}
+            result[field] = entry
+        return result
