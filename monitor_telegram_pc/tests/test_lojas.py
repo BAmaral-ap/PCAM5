@@ -279,6 +279,7 @@ class SchedulerTests(unittest.IsolatedAsyncioTestCase):
         self.clock.t+=180;await monitor.check_due()
         self.assertEqual(len(self.calls),1)
     async def test_without_reviewed_terms_no_network_and_enabling_resumes(self):
+        self.catalog['exigir_termos_verificados'] = True
         self.catalog['lojas']['kabum']['termos_verificados']=False
         def fetch(url):
             self.calls.append(url)

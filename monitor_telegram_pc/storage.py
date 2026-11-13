@@ -104,6 +104,20 @@ class Store:
             );
         """)
 
+        # A roundup may contain several offers of the same model. Preserve every
+        # occurrence instead of failing the whole message on the old primary key.
+        if 'occurrence' not in {row['name'] for row in self.db.execute('PRAGMA table_info(offers)')}:
+            with self.db:
+                self.db.execute('BEGIN IMMEDIATE')
+                self.db.execute("""CREATE TABLE offers_updated (
+                    channel TEXT NOT NULL, message_id INTEGER NOT NULL,
+                    model TEXT NOT NULL, occurrence INTEGER NOT NULL, payload TEXT NOT NULL,
+                    PRIMARY KEY(channel,message_id,model,occurrence),
+                    FOREIGN KEY(channel,message_id) REFERENCES messages(channel,message_id))""")
+                self.db.execute('INSERT INTO offers_updated SELECT channel,message_id,model,0,payload FROM offers')
+                self.db.execute('DROP TABLE offers')
+                self.db.execute('ALTER TABLE offers_updated RENAME TO offers')
+
     def __enter__(self) -> "Store":
         return self
 
@@ -151,10 +165,10 @@ class Store:
                                        (channel, msg_id, timestamp, text)).rowcount
             if not inserted:
                 return False
-            for offer in offers:
+            for occurrence, offer in enumerate(offers):
                 payload = dict(offer, canal=channel, message_id=msg_id, data=timestamp)
-                self.db.execute("INSERT INTO offers VALUES (?,?,?,?)",
-                                (channel, msg_id, offer["peca"], _json(payload)))
+                self.db.execute("INSERT INTO offers(channel,message_id,model,occurrence,payload) VALUES (?,?,?,?,?)",
+                                (channel, msg_id, offer["peca"], occurrence, _json(payload)))
             for notification in notifications or []:
                 self._enqueue(notification["key"], notification["payload"], notification.get("date", timestamp))
                 if notification.get("fingerprint"):
@@ -166,7 +180,7 @@ class Store:
 
     def offers(self, include_imported: bool = False) -> list[dict]:
         result = [json.loads(r[0]) for r in self.db.execute(
-            "SELECT payload FROM offers ORDER BY channel,message_id,model")]
+            "SELECT payload FROM offers ORDER BY channel,message_id,model,occurrence")]
         if include_imported:
             result.extend(self.imported_offers())
         return result

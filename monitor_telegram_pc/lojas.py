@@ -12,7 +12,7 @@ from urllib.parse import urlsplit
 
 from lojas_dados import StoreTracking
 from lojas_extracao import ExtractionError, extract_public_offer
-from lojas_rede import FetchError, fetch_public, product_url, robots_allows, validate_catalog
+from lojas_rede import FetchError, fetch_public, product_url, robots_allows, validate_catalog, requires_terms_review
 from parsing import extract_coupon, parse_offers
 
 LOG = logging.getLogger('pcam5.lojas')
@@ -58,7 +58,7 @@ class ShopMonitor:
         for item in items:
             policy = catalog.get('lojas', {}).get(item['loja'], {})
             row = self.tracking.target(item)
-            if isinstance(policy, dict) and policy.get('termos_verificados') is True and row and row['last_status'] == 'termos_nao_verificados':
+            if isinstance(policy, dict) and not requires_terms_review(catalog, item['loja']) and row and row['last_status'] == 'termos_nao_verificados':
                 with self.tracking.db:
                     self.tracking.db.execute('UPDATE shop_targets SET next_attempt=0 WHERE key=?', (row['key'],))
 
@@ -131,7 +131,7 @@ class ShopMonitor:
             self.tracking.started(item, now)
             policies = self.catalog.get('lojas', {})
             policy = policies.get(key, {}) if isinstance(policies, dict) else {}
-            if not isinstance(policy, dict) or policy.get('termos_verificados') is not True:
+            if not isinstance(policy, dict) or requires_terms_review(self.catalog, key):
                 self.tracking.failure(item, now, 'termos_nao_verificados',
                     'Confirme que a política da loja permite esta consulta pública', now + 3600)
                 LOG.warning('%s: consulta não iniciada; termos ainda não verificados.', key)

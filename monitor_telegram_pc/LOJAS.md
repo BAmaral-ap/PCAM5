@@ -25,13 +25,9 @@ Situação verificada durante o desenvolvimento:
 
 Essa resposta veio do proxy da máquina de desenvolvimento, portanto **não demonstra que as lojas bloqueariam seu notebook**. O funcionamento com o HTML real de cada loja ainda precisa ser validado somente depois de confirmadas as condições de acesso.
 
-**As duas lojas começam com `termos_verificados: false`**, pois os termos e o acesso real não puderam ser verificados no ambiente de desenvolvimento. Assim, nenhuma página é consultada automaticamente por padrão. Para cada loja, verifique sua política oficial e confirme que a consulta pública automatizada desse produto é permitida. Somente então, em `produtos_lojas.json`, altere a respectiva entrada para:
+As consultas públicas às lojas cadastradas começam sem exigir a marcação manual de `termos_verificados`. O valor antigo `false` não impede a consulta. O monitor continua respeitando robots.txt, CAPTCHA, HTTP 403/429 e os intervalos de requisição. Isso não significa que os termos da loja foram verificados.
 
-```json
-"kabum": {"termos_verificados": true}
-```
-
-Faça o mesmo para `pichau` apenas se tiver verificado a política dessa loja. Isso não substitui a verificação automática do `robots.txt`: se ele proibir o acesso, estiver indisponível ou retornar um desafio, o produto não é consultado. Em caso de dúvida sobre a política, mantenha `false`. Reinicie o monitor após editar o arquivo.
+Para quem quiser manter a exigência manual, o catálogo aceita `"exigir_termos_verificados": true` na raiz. Nesse modo, cada loja ainda precisa de `termos_verificados: true`. Reiniciar a versão atual libera automaticamente as tentativas antigas paradas por `termos_nao_verificados`, preservando pausas decorrentes de bloqueios reais.
 
 Se a loja permitir um método oficial de consulta com acesso autorizado, ele é preferível. Esta versão ainda não integra nenhuma API oficial de varejista, pois suas condições e acesso não foram confirmados. Também não utiliza Playwright: ele poderia carregar recursos adicionais cuja permissão ainda não foi verificada.
 
@@ -55,7 +51,7 @@ Para consultar uma vez sem enviar mensagens, usando um banco de teste independen
 .\.venv\Scripts\python.exe monitor.py --db .\dados\teste-lojas.sqlite3 --lojas --no-notify
 ```
 
-`--no-notify` também registra os resultados nesse banco, mas não enfileira alertas. Esse comando só faz conexões se os termos da loja tiverem sido marcados como verificados e o `robots.txt` permitir. Um resultado `termos_nao_verificados` significa que **nenhum pedido à loja foi feito**.
+`--no-notify` também registra os resultados nesse banco, mas não enfileira alertas. Esse comando respeita robots.txt e os limites da loja. A marcação manual de termos é opcional. Um resultado `termos_nao_verificados` significa que **nenhum pedido à loja foi feito**.
 
 Pare o monitor antes de consultar o banco principal, pois uma única instância o utiliza por vez:
 

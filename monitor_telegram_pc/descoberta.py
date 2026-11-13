@@ -8,7 +8,7 @@ import re
 from urllib.parse import urlsplit, unquote
 
 from descoberta_fontes import QUERIES, search, xml_links
-from lojas_rede import DOMAINS, FetchError, product_url, robots_allows
+from lojas_rede import DOMAINS, FetchError, product_url, robots_allows, requires_terms_review
 from lojas_extracao import ExtractionError, extract_public_offer, _Scripts, _nodes, _type
 
 LOG = logging.getLogger('pcam5.descoberta')
@@ -35,7 +35,7 @@ def register_domains(catalog):
         for domain in domains:
             if public_host('https://' + domain) != domain:
                 raise ValueError('Domínio inválido')
-        if domains and policy.get('termos_verificados') is True and policy.get('confiavel') is True:
+        if domains and policy.get('confiavel') is True:
             DOMAINS[store] = set(domains)
 
 
@@ -56,6 +56,10 @@ class Discovery:
             id TEXT PRIMARY KEY, proxima REAL DEFAULT 0, tentativas INTEGER DEFAULT 0,
             estado TEXT, ultima REAL, detalhe TEXT, cursor INTEGER DEFAULT 0);
         ''')
+        if not monitor.catalog.get('exigir_termos_verificados', False):
+            with self.db:
+                self.db.execute("UPDATE discovery_sources SET proxima=0 WHERE estado='termos_nao_verificados'")
+                self.db.execute("UPDATE discovery_urls SET proxima=0 WHERE estado='termos_nao_verificados'")
         self.reload()
 
     def reload(self):
@@ -113,7 +117,7 @@ class Discovery:
 
     async def public_read(self, url, store):
         m = self.monitor
-        if m.catalog.get('lojas', {}).get(store, {}).get('termos_verificados') is not True:
+        if requires_terms_review(m.catalog, store):
             raise FetchError('termos_nao_verificados', 'Política de acesso ainda não verificada')
         policy = m.catalog.get('lojas', {}).get(store, {})
         if policy.get('dominios') and policy.get('confiavel') is not True:

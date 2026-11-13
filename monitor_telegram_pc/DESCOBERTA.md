@@ -29,7 +29,7 @@ Há três adaptadores independentes: sitemaps públicos, RSS/Atom e APIs oficiai
 | Fonte | Configuração e situação nesta entrega |
 |---|---|
 | Telegram existente | URLs diretas em anúncios RX 9070 XT alimentam automaticamente a fila. Encurtadores ficam pendentes; não há resolução automática. |
-| Sitemaps das lojas | Sem chave/cobrança de API. Descoberta de endereços declarados no robots.txt, somente após revisão das políticas da loja. Nenhum sitemap de produção foi validado neste ambiente. |
+| Sitemaps das lojas | Sem chave/cobrança de API. Descoberta de endereços declarados no robots.txt, sem exigir marcação manual de termos, respeitando robots.txt e bloqueios. Nenhum sitemap de produção foi validado neste ambiente. |
 | RSS/Atom | Gratuito quando publicado com autorização. É necessário informar uma URL de feed autorizado, não cada URL de produto. Nenhum feed de terceiros foi presumido autorizado. |
 | Brave Search | Adaptador implementado; exige chave e disponibilidade de plano/cota. Desativado por padrão; gratuidade não garantida. |
 | Google Custom Search | Adaptador implementado; exige chave, identificador do buscador e serviço disponível para a conta. Desativado por padrão; elegibilidade, cotas e cobrança precisam ser verificadas. |
@@ -38,15 +38,17 @@ O ambiente de desenvolvimento tem política de rede restrita, sem domínios dess
 
 KaBuM!, Pichau, Terabyte, GK InfoStore, Patoloco, WAZ, Amazon Brasil, Mercado Livre, Magazine Luiza e Casas Bahia têm domínios reconhecidos. Isso **não comprova acesso, termos, reputação de vendedor ou suporte do HTML real** de nenhuma delas. Todas precisam de acesso permitido e dados estruturados compatíveis. Marketplaces também precisam identificar o vendedor. Não foram implementadas APIs comerciais específicas dessas lojas nem automação de login/carrinho.
 
-Em `produtos_lojas.json`, mantenha as entradas existentes. Para uma loja cuja política você tenha verificado, configure, por exemplo:
+Em `produtos_lojas.json`, mantenha as entradas existentes. A descoberta das lojas conhecidas não exige marcar termos. Para controlar uma fonte, configure, por exemplo:
 
 ```json
-"kabum": {"termos_verificados": true, "descobrir": true}
+"kabum": {"descobrir": true}
 ```
 
-Isso permite consultar robots.txt e os sitemaps declarados. O robô ainda respeita as proibições, intervalos e bloqueios. Se a loja publicar outro sitemap autorizado, use `"sitemaps": ["https://DOMINIO/sitemap-publico.xml"]`. Não habilite uma loja sem verificar sua política. Uma loja inacessível não interrompe as demais.
+O campo `termos_verificados` é apenas informativo por padrão. A exigência manual pode ser restaurada com `exigir_termos_verificados: true` na raiz do catálogo. Reiniciar libera as tentativas antigas paradas somente por termos pendentes; pausas por bloqueios permanecem.
 
-Para um novo domínio confiável, acrescente uma entrada em `lojas` com `dominios`, `confiavel: true` e `termos_verificados: true`. O domínio deve ser público, sem protocolo ou caminho. A descoberta passa a cadastrar seus produtos automaticamente após essa revisão por loja. Domínios desconhecidos são registrados como `loja_pendente`, sem consultas: resultados de busca não estabelecem confiança comercial ou autorização de acesso.
+Isso permite consultar robots.txt e os sitemaps declarados. O robô ainda respeita as proibições, intervalos e bloqueios. Se a loja publicar outro sitemap autorizado, use `"sitemaps": ["https://DOMINIO/sitemap-publico.xml"]`. Uma loja inacessível não interrompe as demais.
+
+Para um novo domínio confiável, acrescente uma entrada em `lojas` com `dominios` e `confiavel: true`. O domínio deve ser público, sem protocolo ou caminho. A descoberta passa a cadastrar seus produtos automaticamente após essa revisão por loja. Domínios desconhecidos são registrados como `loja_pendente`, sem consultas: resultados de busca não estabelecem confiança comercial ou autorização de acesso.
 
 ## Configuração opcional em config.json
 

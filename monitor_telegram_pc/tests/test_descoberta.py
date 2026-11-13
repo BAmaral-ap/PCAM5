@@ -53,6 +53,7 @@ class DiscoveryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.store.notifications(),[])
 
     async def test_unreviewed_store_and_unknown_domains_never_fetched(self):
+        self.catalog['exigir_termos_verificados'] = True
         self.catalog['lojas']['kabum']['termos_verificados']=False
         self.monitor.discovery.ingest(URL,'telegram')
         self.monitor.discovery.ingest('https://nova-loja.com.br/rx-9070-xt','busca')
@@ -180,3 +181,26 @@ class IntegrationTests(unittest.IsolatedAsyncioTestCase):
         await self.monitor.check_due()
         self.assertEqual(len(self.monitor.items),1)
         self.assertEqual(self.store.notifications(),[])
+
+class PublicAccessTests(unittest.IsolatedAsyncioTestCase):
+    setUp = DiscoveryTests.setUp
+    async def test_known_store_works_without_manual_terms_checkbox(self):
+        self.catalog['lojas']['kabum']['termos_verificados']=False
+        await self.monitor.check_due()
+        self.assertEqual(len(self.monitor.items),1)
+        self.assertTrue(self.calls)
+    async def test_old_terms_wait_cleared_without_clearing_block_pause(self):
+        self.catalog['exigir_termos_verificados']=True
+        self.catalog['lojas']['kabum']['termos_verificados']=False
+        self.monitor.discovery.ingest(URL,'telegram')
+        await self.monitor.discovery.tick()
+        self.monitor.tracking.host('loja:kabum')
+        self.monitor.tracking.pause_host('loja:kabum',self.clock.now()+10000,'bloqueado')
+        self.catalog['exigir_termos_verificados']=False
+        from descoberta import Discovery
+        new=Discovery(self.monitor)
+        row=self.store.db.execute('SELECT * FROM discovery_urls').fetchone()
+        self.assertEqual(row['proxima'],0)
+        await new.validate(row)
+        self.assertEqual(self.calls,[])
+        self.assertGreater(self.monitor.tracking.host('loja:kabum')['paused_until'],self.clock.now())

@@ -26,6 +26,12 @@ TRACKING = {'affiliated_code', 'aff', 'affiliate', 'tag', 'ref', 'gclid', 'fbcli
 SENSITIVE = {'token', 'key', 'api_key', 'apikey', 'auth', 'authorization', 'password', 'senha', 'session', 'cookie', 'cpf', 'email', 'cep', 'sid'}
 
 
+def requires_terms_review(catalog, store):
+    """Optional manual checklist; public access still respects robots and backoff."""
+    return (catalog.get('exigir_termos_verificados', False) is True and
+            catalog.get('lojas', {}).get(store, {}).get('termos_verificados') is not True)
+
+
 def compatible_target(category, title):
     if category == 'FONTE':
         powers = re.findall(r'\b(\d{3,4})\s*w(?:atts?)?\b', title, re.I)

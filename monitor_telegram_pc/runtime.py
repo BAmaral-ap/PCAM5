@@ -1,6 +1,8 @@
 """Incremental Telethon collection, durable notification queue and safe logging."""
 from __future__ import annotations
 
+import sqlite3
+
 import asyncio
 import hashlib
 import json
@@ -386,6 +388,8 @@ async def collect_once(client, store, cfg, limit=150, days=7, notifications_enab
             LOG.warning('@%s: FloodWait de %ss; cursor preservado.', channel, exc.seconds)
         except (OSError, ConnectionError, asyncio.TimeoutError):
             LOG.warning('@%s: conexão interrompida; consulta será retomada pelo cursor.', channel)
+        except sqlite3.IntegrityError:
+            LOG.error('@%s: inconsistência ao gravar no banco; cursor preservado para nova tentativa.', channel)
         except Exception as exc:
             # No exception text: auth/API errors may contain sensitive input.
             LOG.error('@%s: falha %s; verifique acesso ao canal. Cursor preservado.', channel, type(exc).__name__)
