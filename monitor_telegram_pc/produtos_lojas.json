@@ -2,9 +2,15 @@
   "versao": 1,
   "queda_minima_percentual": 5,
   "lojas": {
-    "kabum": {"termos_verificados": false},
-    "pichau": {"termos_verificados": false},
-    "terabyte": {"termos_verificados": false}
+    "kabum": {
+      "termos_verificados": false
+    },
+    "pichau": {
+      "termos_verificados": false
+    },
+    "terabyte": {
+      "termos_verificados": false
+    }
   },
   "produtos": [
     {
@@ -16,7 +22,11 @@
       "url": "https://www.kabum.com.br/produto/921271/placa-de-video-asrock-radeon-rx-9070-xt-challenger-amd-16gb-90-ga61zz-00uanf",
       "sku": "90-GA61ZZ-00UANF",
       "sku_loja": "921271",
-      "termos_identificacao": ["ASRock", "9070", "Challenger"],
+      "termos_identificacao": [
+        "ASRock",
+        "9070",
+        "Challenger"
+      ],
       "meta_centavos": 510000,
       "intervalo_segundos": 180,
       "cupons": []
@@ -29,10 +39,40 @@
       "familia": "RX 9070 XT",
       "url": "https://www.pichau.com.br/placa-de-video-xfx-radeon-rx-9070-xt-swift-white-triple-fan-gaming-edition-16gb-gddr6-256-bit-rx-97tswf3w9",
       "sku": "RX-97TSWF3W9",
-      "termos_identificacao": ["XFX", "9070", "Swift", "White"],
+      "termos_identificacao": [
+        "XFX",
+        "9070",
+        "Swift",
+        "White"
+      ],
       "meta_centavos": 510000,
       "intervalo_segundos": 180,
       "cupons": []
+    },
+    {
+      "id": "kabum-gigabyte-9070xt-gaming-747554",
+      "nome": "Gigabyte Radeon RX 9070 XT Gaming 16G",
+      "loja": "kabum",
+      "categoria": "GPU",
+      "familia": "RX 9070 XT",
+      "url": "https://www.kabum.com.br/produto/747554/placa-de-video-rx-9070-xt-gaming-16g-amd-radeon-gigabyte-16gb-gddr6-256bits-rgb-gv-r9070xtgaming-16gd",
+      "sku": "GV-R9070XTGAMING-16GD",
+      "sku_loja": "747554",
+      "termos_identificacao": [
+        "Gigabyte",
+        "9070",
+        "Gaming"
+      ],
+      "meta_centavos": 550000,
+      "intervalo_segundos": 900,
+      "cupons": [],
+      "monitoramento_especial": {
+        "cupom": "ZAFADINHO13",
+        "desconto_percentual": 13,
+        "aproximacao_centavos": 650000,
+        "prioridade_centavos": 640000,
+        "queda_centavos": 10000
+      }
     }
   ]
 }

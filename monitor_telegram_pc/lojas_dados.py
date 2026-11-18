@@ -66,6 +66,59 @@ def _event(previous, current, target, reduction):
     return None
 
 
+def _special(item, current, previous):
+    """Simulação condicional sobre o preço público, sem supor acúmulo no Pix."""
+    rule = item.get('monitoramento_especial')
+    if not rule or current.get('status') == 'produto_esgotado':
+        return None, None
+    base = current.get('preco_publico_centavos')
+    percent = rule.get('desconto_percentual')
+    if type(base) is not int or base <= 0 or type(percent) is not int or not 0 <= percent <= 100:
+        return None, None
+    discounted = (base * (100 - percent) + 50) // 100
+    freight = current.get('frete_centavos')
+    total = discounted + freight if type(freight) is int and freight >= 0 else None
+    old = (previous or {}).get('preco_publico_centavos')
+    def level(value, shipping):
+        if type(value) is not int: return 0
+        estimate = (value * (100 - percent) + 50) // 100
+        if type(shipping) is int and shipping >= 0 and estimate + shipping <= item['meta_centavos']: return 3
+        if value <= rule['prioridade_centavos']: return 2
+        if value <= rule['aproximacao_centavos']: return 1
+        return 0
+    now_level = level(base, freight)
+    old_level = level(old, (previous or {}).get('frete_centavos'))
+    event = None
+    if now_level > old_level:
+        event = {1:'APROXIMAÇÃO DA META', 2:'ALTA PRIORIDADE', 3:'META ESTIMADA ATINGIDA'}[now_level]
+    elif type(old) is int and old - base >= rule['queda_centavos']:
+        event = 'QUEDA DE R$ 100 OU MAIS'
+    elif previous and previous.get('estoque') == 'esgotado' and current.get('estoque') == 'em_estoque':
+        event = 'PRODUTO VOLTOU AO ESTOQUE'
+    elif previous and previous.get('vendedor') and current.get('vendedor') and previous['vendedor'] != current['vendedor']:
+        event = 'VENDEDOR ALTERADO'
+    return event, (base, discounted, freight, total)
+
+
+def _special_message(item, current, event, values, observed):
+    base, discounted, freight, total = values
+    rule = item['monitoramento_especial']
+    lines = [f'🔥 RX 9070 XT — {event} — KABUM!', f"Modelo: {item['nome']}",
+             f'Preço público base: {money(base)} (confirme a modalidade e se é preço normal)',
+             f"Preço Pix: {money(current.get('preco_pix_centavos'))}",
+             f"Cupom: {rule.get('cupom') or 'não informado'} — {rule['desconto_percentual']}% simulado, não validado",
+             f'Preço estimado com cupom: {money(discounted)}',
+             f'Frete: {money(freight)}', f'Preço final estimado: {money(total)}',
+             f"Meta com frete: {money(item['meta_centavos'])}"]
+    if total is not None:
+        lines.append(f"Diferença para a meta: {money(abs(total-item['meta_centavos']))} " + ('abaixo' if total <= item['meta_centavos'] else 'acima'))
+    else:
+        lines.append('Frete não verificado: não é possível confirmar que o total atende à meta.')
+    lines += [f"Estoque: {current.get('estoque', 'desconhecido')}", f"Vendedor: {current.get('vendedor') or 'não informado; confirme se é KaBuM!'}",
+              'Simulação condicionada: confirme validade, limites e acúmulo no carrinho; não somamos desconto Pix.',
+              f'Verificado em: {observed}', item['url']]
+    return '\n'.join(lines)
+
 def _message(item, current, previous, event, observed, hint, cfg, purchases=()):
     fields = [('Preço público', 'preco_publico_centavos'), ('Preço PIX', 'preco_pix_centavos'),
               ('Preço cartão', 'preco_cartao_centavos')]
@@ -234,12 +287,15 @@ class StoreTracking:
                 if previous_for_comparison.get(field) is None:
                     previous_for_comparison[field] = value
         event = _event(previous_for_comparison, current, item, reduction)
+        special_event, special_values = _special(item, current, previous_for_comparison)
+        if item.get('monitoramento_especial'):
+            event = special_event
         hint = row['coupon_hint'] if row['coupon_hint'] and row['coupon_time'] and now-row['coupon_time'] <= 86400 else None
         if not hint and item.get('cupons'):
             hint = item['cupons'][0]
         coupon_new = hint and (row['last_coupon_alert'] != hint or not row['last_coupon_alert_time']
                                or now - row['last_coupon_alert_time'] >= 86400)
-        if not event and coupon_new and current['status'] != 'produto_esgotado' and any(_price_fields(current).values()):
+        if not event and not item.get('monitoramento_especial') and coupon_new and current['status'] != 'produto_esgotado' and any(_price_fields(current).values()):
             event = 'POSSÍVEL PROMOÇÃO COM CUPOM'
         # Suppress only a confirmed sent Telegram alert for the same direct
         # product and exact price. Pending/uncertain sends must not hide a sale.
@@ -249,7 +305,7 @@ class StoreTracking:
             sent = self.db.execute('SELECT state FROM notifications WHERE dedupe_key=?', (row['telegram_key'],)).fetchone()
             if sent and sent['state'] == 'sent':
                 event = None
-        payload = _message(item, current, previous_for_comparison, event, _local(now), hint, cfg, self.store.purchases()) if event else None
+        payload = (_special_message(item, current, event, special_values, _local(now)) if special_values and item.get('monitoramento_especial') else _message(item, current, previous_for_comparison, event, _local(now), hint, cfg, self.store.purchases())) if event else None
         if current['status'] != 'produto_esgotado':
             known_prices.update({k: v for k, v in _price_fields(current).items() if v is not None})
         # State, observation and notification are committed atomically.

@@ -440,6 +440,7 @@ class SchedulerTests(unittest.IsolatedAsyncioTestCase):
 class EndToEndTests(unittest.IsolatedAsyncioTestCase):
     async def test_user_supplied_gpu_urls_with_independent_simulated_stores(self):
         catalog, items = load_catalog(Path(__file__).resolve().parents[1] / 'produtos_lojas.json')
+        items = [item for item in items if item['id'] in {'kabum-asrock-9070xt-challenger', 'pichau-xfx-9070xt-swift-white'}]
         self.assertEqual(len(items), 2)
         for key in ('kabum', 'pichau'):
             catalog['lojas'][key]['termos_verificados'] = True
