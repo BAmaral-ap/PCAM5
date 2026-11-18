@@ -160,7 +160,7 @@ def make_notifications(store, offer, cfg, purchases, now):
             if (offer.get('parcelamento_sem_juros') is True and type(announced) is int
                     and 0 < announced <= target and evaluation.get('preco_centavos') is None):
                 evaluation = dict(evaluation, classificacao='🔥 KIT DDR5 2×16 GB — VERIFICAR PREÇO',
-                    justificativa=['Preço anunciado dentro da meta; confirme o total parcelado no cartão.'] + evaluation['justificativa'])
+                    justificativa=[('Preço anunciado dentro da meta; confirme o total parcelado no cartão.' if ram_strict else 'Preço anunciado dentro da meta; confirme o preço no Pix.')] + evaluation['justificativa'])
         if evaluation['classificacao'] == 'NÃO COMPENSA':
             evaluation = dict(evaluation, classificacao='AVALIAR PREÇO E ORÇAMENTO',
                               justificativa=['Confira o preço final, o orçamento e a compatibilidade.'] + evaluation['justificativa'])

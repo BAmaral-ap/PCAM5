@@ -132,7 +132,7 @@ class ParsingTests(unittest.TestCase):
 
     def test_explicit_parenthesized_coupon_uses_pix_payment(self):
         from finance import evaluate_offer
-        from settings import load_config
+        from legacy_config import load_config
         text = ("Processador AMD Ryzen 7 7800X3D, 8-Core, SMT, AM5\n"
                 "R$ 1.849,99 no PIX (R$ 1.683,49 com o cupom THEKING)\n"
                 "Loja: KaBuM!\nhttps://www.kabum.com.br/produto/426262\n"

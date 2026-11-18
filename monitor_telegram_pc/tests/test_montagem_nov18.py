@@ -32,8 +32,8 @@ class CurrentBuildTests(unittest.TestCase):
         self.assertEqual(report['total_pago_avista_centavos'],245745)
         self.assertEqual(report['cartao_comprometido_centavos'],206002)
         self.assertEqual({p['categoria'] for p in report['faltantes']},{'GPU','RAM'})
-        self.assertEqual(report['restante_pix_centavos'],510000)
-        self.assertEqual(report['restante_cartao_centavos'],180000)
+        self.assertEqual(report['restante_pix_centavos'],690000)
+        self.assertEqual(report['restante_cartao_centavos'],0)
         self.assertEqual(report['total_projetado_centavos'],1141747)
     def test_prior_records_and_installment_payments_preserved(self):
         for p in LEGACY_PURCHASES:self.store.add_purchase(p)
@@ -66,11 +66,13 @@ class CurrentBuildTests(unittest.TestCase):
         self.assertTrue(self.alerts('RX 9070 XT R$ 4700'))
         self.assertTrue(self.alerts('DDR5 1x16GB 6000 CL38 R$ 1800 em 10x sem juros'))
         self.assertTrue(self.alerts('DDR5 1x16GB R$ 1700'))
-        self.assertEqual(self.alerts('DDR5 1x16GB 10x de R$ 170 com juros no cartão'),[])
+        alerts=self.alerts('DDR5 1x16GB 10x de R$ 170 com juros no cartão')
+        self.assertTrue(alerts)
+        self.assertIn('VERIFICAR PREÇO NO PIX',alerts[0]['payload'])
     def test_ram_preferences_and_no_old_active_sale(self):
         self.migrate()
         ram=self.cfg['montagem']['RAM']
-        self.assertEqual(ram['fonte_pagamento'],'renda_pessoal_separada')
+        self.assertEqual(ram['fonte_pagamento'],'reserva_avista')
         self.assertEqual(self.cfg['metas']['DDR5 1x16GB'],1800)
         self.assertEqual(self.cfg['perfis']['Maxsun Terminator B650M WiFi ICE White']['slots_memoria'],4)
         self.assertEqual(self.store.offers(),[])
@@ -89,3 +91,39 @@ class CurrentBuildTests(unittest.TestCase):
         self.migrate()
         self.assertEqual(self.store.notifications()[0]['state'],'expired')
         self.assertEqual(len(self.store.offers()),1)
+
+    def test_ram_pix_price_wins_without_installment_requirement(self):
+        from finance import evaluate_offer
+        self.migrate()
+        text='DDR5 1x16GB 6000 CL36 R$ 1700 no Pix ou R$ 1900 no cartão'
+        offer=parse_offers('teste',10,self.now,text,self.cfg)[0]
+        evaluation=evaluate_offer(offer,self.cfg,self.store.purchases())
+        self.assertEqual(evaluation['pagamento'],'pix')
+        self.assertEqual(evaluation['preco_centavos'],170000)
+        alerts=self.alerts(text)
+        self.assertTrue(alerts)
+        self.assertNotIn('Parcelamento sem juros ainda não confirmado',alerts[0]['payload'])
+        self.assertNotIn('renda pessoal separada',alerts[0]['payload'])
+        unknown=self.alerts('DDR5 1x16GB R$ 1700')
+        self.assertTrue(unknown)
+        self.assertIn('VERIFICAR PREÇO NO PIX',unknown[0]['payload'])
+
+    def test_v4_to_pix_preserves_records_reactivation_and_custom_cash(self):
+        from inventario import PURCHASE_UPDATE_ID, UPDATE_ID
+        for p in PURCHASES:self.store.add_purchase(p)
+        self.store.set_meta(PURCHASE_UPDATE_ID,True)
+        reactivate(self.store,'FONTE')
+        before=self.store.purchases()
+        old=copy.deepcopy(self.cfg)
+        old['pcam5_atualizacao_montagem']=PURCHASE_UPDATE_ID
+        old['orcamento']['pix']=6000
+        old['montagem']['RAM'].update(pagamento='cartao',parcelamento='cartao_sem_juros',
+                                     fonte_pagamento='renda_pessoal_separada',estimativa_cartao=1800,estimativa_pix=None)
+        self.cfg=updated_config(old)
+        self.migrate();self.migrate()
+        self.assertEqual(self.store.purchases(),before)
+        self.assertTrue(self.store.get_meta(UPDATE_ID))
+        self.assertEqual(self.cfg['orcamento']['pix'],6000)
+        self.assertEqual(self.cfg['montagem']['RAM']['pagamento'],'pix')
+        self.assertEqual(self.cfg['montagem']['RAM']['estimativa_pix'],1800)
+        self.assertIsNone(self.cfg['montagem']['RAM']['estimativa_cartao'])

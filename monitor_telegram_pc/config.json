@@ -90,12 +90,12 @@
     },
     "RAM": {
       "modelo": "DDR5 1x16GB",
-      "estimativa_pix": null,
-      "estimativa_cartao": 1800,
-      "pagamento": "cartao",
+      "estimativa_pix": 1800,
+      "estimativa_cartao": null,
+      "pagamento": "pix",
       "possui": false,
-      "fonte_pagamento": "renda_pessoal_separada",
-      "parcelamento": "cartao_sem_juros",
+      "fonte_pagamento": "reserva_avista",
+      "parcelamento": "avista",
       "frequencia_preferida_mts": 6000,
       "latencias_preferidas": [
         30,
@@ -222,7 +222,7 @@
       "interface": "NVMe PCIe 4.0"
     }
   },
-  "observacao_orcamento": "CPU adquirida em 6 parcelas; nenhuma parcela é dada como paga automaticamente. Seis peças compradas: R$ 4.517,47. Faltam GPU e RAM; RAM planejada no cartão sem juros com renda separada.",
+  "observacao_orcamento": "CPU adquirida em 6 parcelas; nenhuma parcela é dada como paga automaticamente. Seis peças compradas: R$ 4.517,47. Faltam GPU e RAM; RAM planejada no Pix, incluída na reserva à vista.",
   "gemini": {
     "ativado": true,
     "modelo": "gemini-3.5-flash-lite",
@@ -236,7 +236,7 @@
   },
   "meta_7800x3d_inclui_frete": true,
   "alertar_orcamento_incerto": true,
-  "pcam5_atualizacao_montagem": "montagem-confirmada-2026-11-v4-maxsun-nv3",
+  "pcam5_atualizacao_montagem": "montagem-confirmada-2026-11-v5-ram-pix",
   "descoberta": {
     "ativado": true,
     "intervalo_produto_segundos": 1200,

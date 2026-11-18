@@ -11,7 +11,8 @@ from finance import validate_purchase
 OLD_UPDATE_ID = 'montagem-confirmada-2026-11-v1'
 PREVIOUS_UPDATE_ID = 'montagem-confirmada-2026-11-v2-ram-ssd'
 CPU_UPDATE_ID = 'montagem-confirmada-2026-11-v3-9800x3d'
-UPDATE_ID = 'montagem-confirmada-2026-11-v4-maxsun-nv3'
+PURCHASE_UPDATE_ID = 'montagem-confirmada-2026-11-v4-maxsun-nv3'
+UPDATE_ID = 'montagem-confirmada-2026-11-v5-ram-pix'
 PURCHASES = [
     {'ref_confirmacao':'cooler-2026-11', 'categoria':'COOLER-CPU', 'modelo':'ARCTIC Freezer 36 A-RGB Black',
      'total_centavos':21581, 'pagamento':'pix', 'parcelas':1, 'parcelas_pagas':0,
@@ -64,14 +65,14 @@ def updated_config(config):
     if not site_confirmed and not any(site(entry) for entry in pending):
         pending.append({'descricao':'desenvolvimento de site', 'valor_centavos':500000,
                         'status':'pendente', 'incluida_no_previsto':True})
-    if previous_update not in {OLD_UPDATE_ID, PREVIOUS_UPDATE_ID, CPU_UPDATE_ID, UPDATE_ID}:
+    if previous_update not in {OLD_UPDATE_ID, PREVIOUS_UPDATE_ID, CPU_UPDATE_ID, PURCHASE_UPDATE_ID, UPDATE_ID}:
         limits.update(pix=None, total_maximo=9450, previsto_total=9450)
     limits['entradas_pendentes'] = pending
     if confirmed:
         limits['entradas_confirmadas'] = confirmed
     metas = cfg.setdefault('metas', {})
     metas.setdefault('DDR5 2x16GB', 2400)
-    if previous_update not in {OLD_UPDATE_ID, PREVIOUS_UPDATE_ID, CPU_UPDATE_ID, UPDATE_ID}:
+    if previous_update not in {OLD_UPDATE_ID, PREVIOUS_UPDATE_ID, CPU_UPDATE_ID, PURCHASE_UPDATE_ID, UPDATE_ID}:
         metas['Ryzen 7 7800X3D'] = 1750
     metas['SSD NVMe'] = 700
     cfg['meta_7800x3d_inclui_frete'] = True
@@ -83,7 +84,7 @@ def updated_config(config):
         build.setdefault(category, {})['modelo'] = model
         # Purchase ledger is the single source of truth for acquisition status.
         build[category]['possui'] = False
-    if previous_update not in {OLD_UPDATE_ID, PREVIOUS_UPDATE_ID, CPU_UPDATE_ID, UPDATE_ID}:
+    if previous_update not in {OLD_UPDATE_ID, PREVIOUS_UPDATE_ID, CPU_UPDATE_ID, PURCHASE_UPDATE_ID, UPDATE_ID}:
         if 'GPU' in build: build['GPU']['estimativa_pix'] = 5100
     cpu = build.setdefault('CPU', {})
     cpu.update(modelo='Ryzen 7 9800X3D', possui=False, pagamento='cartao',
@@ -91,7 +92,7 @@ def updated_config(config):
     memory = build.setdefault('RAM', {})
     memory.update(pagamento='indefinido', fonte_pagamento='a_definir', parcelamento='opcional')
     ssd = build.setdefault('SSD', {})
-    if previous_update not in {PREVIOUS_UPDATE_ID, CPU_UPDATE_ID, UPDATE_ID}:
+    if previous_update not in {PREVIOUS_UPDATE_ID, CPU_UPDATE_ID, PURCHASE_UPDATE_ID, UPDATE_ID}:
         if ssd.get('possui', False) or not ssd.get('estimativa_pix'):
             ssd['estimativa_pix'] = 700
         if ssd.get('possui', False):
@@ -100,8 +101,8 @@ def updated_config(config):
     else:
         ssd.setdefault('estimativa_pix', 700)
     build.setdefault('GPU', {})['possui'] = False
-    memory.update(modelo='DDR5 1x16GB', possui=False, pagamento='cartao', fonte_pagamento='renda_pessoal_separada',
-                  parcelamento='cartao_sem_juros', estimativa_cartao=1800, estimativa_pix=None,
+    memory.update(modelo='DDR5 1x16GB', possui=False, pagamento='pix', fonte_pagamento='reserva_avista',
+                  parcelamento='avista', estimativa_cartao=None, estimativa_pix=1800,
                   frequencia_preferida_mts=6000, latencias_preferidas=[30,32,36,38], preferir_expo=True)
     metas['DDR5 16GB'] = metas['DDR5 1x16GB'] = 1800
     for category, model in [('PLACA-MAE','Maxsun Terminator B650M WiFi ICE White'), ('SSD','Kingston NV3 1 TB PCIe 4.0')]:
@@ -125,7 +126,7 @@ def updated_config(config):
         for key, value in facts.items():
             profile.setdefault(key, value)
     cfg['observacao_orcamento'] = ('CPU adquirida em 6 parcelas; nenhuma parcela é dada como paga automaticamente. '
-        'Seis peças compradas: R$ 4.517,47. Faltam GPU e RAM; RAM planejada no cartão sem juros com renda separada.')
+        'Seis peças compradas: R$ 4.517,47. Faltam GPU e RAM; RAM planejada no Pix, incluída na reserva à vista.')
     finance = limits.setdefault('financiamentos', [])
     if not isinstance(finance, list):
         raise ValueError('Financiamentos precisam estar em uma lista; confira o orçamento.')
@@ -223,9 +224,11 @@ def _refresh_pending(store, cfg=None):
                         '⚠️ Parcelamento sem juros ainda não confirmado.',
                         'As parcelas da RAM serão pagas com renda pessoal separada',
                         'Confira o preço à vista, as condições do cartão'))]
-                lines[0] = '🔥 LOJA — RAM — VERIFICAR PREÇO E PARCELAMENTO'
+                ram_pix = (cfg or {}).get('montagem', {}).get('RAM', {}).get('parcelamento') == 'avista'
+                lines[0] = '🔥 LOJA — RAM — VERIFICAR PREÇO NO PIX' if ram_pix else '🔥 LOJA — RAM — VERIFICAR PREÇO E PARCELAMENTO'
                 note = (f'⚠️ Parcelamento sem juros ainda não confirmado. Confirme o total no cartão e {desired}.'
-                        if strict else f'Confira o preço à vista, as condições do cartão e se a memória é {desired}.')
+                        if strict else f'RAM planejada no Pix; confirme o preço à vista, frete e se a memória é {desired}.' if ram_pix
+                        else f'Confira o preço à vista, as condições do cartão e se a memória é {desired}.')
                 lines.insert(1, note)
                 db.execute("UPDATE notifications SET payload=?,updated_at=? WHERE id=? AND state='pending'",
                            ('\n'.join(lines), datetime.now(timezone.utc).isoformat(), row['id']))
@@ -241,7 +244,7 @@ def apply_confirmed(store, config=None):
     with db:
         db.execute('BEGIN IMMEDIATE')
         existing=store.purchases()
-        first_update = not store.get_meta(UPDATE_ID)
+        first_update = not store.get_meta(UPDATE_ID) and not store.get_meta(PURCHASE_UPDATE_ID)
         ops=[]
         for raw in PURCHASES:
             wanted=validate_purchase(raw)

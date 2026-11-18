@@ -69,7 +69,8 @@ def _event(previous, current, target, reduction):
 def _message(item, current, previous, event, observed, hint, cfg, purchases=()):
     fields = [('Preço público', 'preco_publico_centavos'), ('Preço PIX', 'preco_pix_centavos'),
               ('Preço cartão', 'preco_cartao_centavos')]
-    display_event = 'RAM — VERIFICAR PREÇO E PARCELAMENTO' if item.get('categoria') == 'RAM' else event
+    ram_pix = cfg.get('montagem', {}).get('RAM', {}).get('parcelamento') == 'avista'
+    display_event = ('RAM — VERIFICAR PREÇO NO PIX' if ram_pix else 'RAM — VERIFICAR PREÇO E PARCELAMENTO') if item.get('categoria') == 'RAM' else event
     lines = [f"🔥 LOJA — {display_event}", f"Produto: {item['nome']}", f"Loja: {item['loja']}"]
     if item.get('descoberto'):
         lines.append('Oferta preliminar: condição '+current.get('condicao', 'não informada')+'; confira vendedor, garantia e reputação antes de comprar.')
@@ -79,6 +80,8 @@ def _message(item, current, previous, event, observed, hint, cfg, purchases=()):
         if cfg.get('montagem', {}).get('RAM', {}).get('parcelamento') == 'cartao_sem_juros':
             lines.append(f'⚠️ Parcelamento sem juros ainda não confirmado. Confirme o total no cartão e {desired}.')
             lines.append('As parcelas da RAM serão pagas com renda pessoal separada da reserva à vista.')
+        elif ram_pix:
+            lines.append(f'RAM planejada no Pix; confirme o preço à vista, frete e se a memória é {desired}.')
         else:
             lines.append(f'Confira o preço à vista, as condições do cartão e se a memória é {desired}.')
     for label, key in fields:

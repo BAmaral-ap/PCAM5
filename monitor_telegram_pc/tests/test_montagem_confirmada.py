@@ -83,10 +83,10 @@ class ConfirmedBuildTests(unittest.TestCase):
         self.assertEqual(report['entradas_pendentes'][0]['valor_centavos'], 500000)
         self.assertEqual(report['entradas_pendentes'][0]['status'], 'pendente')
         self.assertEqual({p['categoria'] for p in report['faltantes']}, {'GPU', 'RAM'})
-        self.assertEqual(next(p for p in report['faltantes'] if p['categoria'] == 'RAM')['pagamento'], 'cartao')
+        self.assertEqual(next(p for p in report['faltantes'] if p['categoria'] == 'RAM')['pagamento'], 'pix')
         self.assertEqual(report['total_projetado_centavos'], 1141747)
-        self.assertEqual(report['projecao_total_avista_centavos'], 755745)
-        self.assertEqual(report['projecao_total_cartao_centavos'], 386002)
+        self.assertEqual(report['projecao_total_avista_centavos'], 935745)
+        self.assertEqual(report['projecao_total_cartao_centavos'], 206002)
         self.assertEqual(report['restante_pagamento_indefinido_centavos'], 0)
         self.assertEqual(report['folga_teto_centavos'], -196747)
 

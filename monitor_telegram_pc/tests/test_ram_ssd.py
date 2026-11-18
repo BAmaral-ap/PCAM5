@@ -261,7 +261,8 @@ class MigrationTests(unittest.TestCase):
             with Store(db) as store:
                 pending = store.pending_notifications()
                 self.assertEqual(len(pending), 1)
-                self.assertIn('Parcelamento sem juros ainda não confirmado', pending[0]['payload'])
+                self.assertNotIn('Parcelamento sem juros ainda não confirmado', pending[0]['payload'])
+                self.assertIn('Forma avaliada: pix', pending[0]['payload'])
                 self.assertIn('PIX: R$ 1.000,00', pending[0]['payload'])
 
     def test_legacy_ssd_csv_reprocessing_preserves_unknown_target(self):
@@ -310,7 +311,7 @@ class MigrationTests(unittest.TestCase):
                 report = budget_snapshot(updated, store.purchases())
                 self.assertNotIn('SSD', {item['categoria'] for item in report['faltantes']})
                 self.assertEqual(report['total_comprado_centavos'], 481747)
-                self.assertEqual(report['fonte_pagamento_ram'], 'renda_pessoal_separada')
+                self.assertEqual(report['fonte_pagamento_ram'], 'reserva_avista')
                 self.assertIsNone(report['reserva_avista_prevista_centavos'])
 
 

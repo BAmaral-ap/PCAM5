@@ -152,7 +152,7 @@ Inicialmente, `excepcional_percentual: 10` exige 10% ou mais abaixo da meta; `bo
 
 As duas primeiras classes e `AVALIAR ALTERNATIVA` notificam por padrão. A triagem ampliada aceita até 25% acima da meta da peça de referência; ajuste `alternativas_gerais.margem_percentual` ou desative `alternativas_gerais.ativado` em `config.json`. Com orçamento pendente, placa-mãe, RAM e SSD ainda podem gerar alerta provisório para verificação. O SSD tem limite próprio de R$ 700; o preço final com frete deve ser confirmado. Preços ou condições ambíguos não entram na triagem de alternativas. Ventoinhas não fazem parte dessa ampliação. Ofertas rejeitadas permanecem no banco.
 
-A RAM planejada é 1×16 GB até R$ 1.800, no cartão sem juros com renda separada; kits 2×16 GB permanecem como alternativa. O limite do kit é R$ 2.400 e pode ser alterado em `metas["DDR5 2x16GB"]`; a meta do módulo único continua independente. Ofertas sem parcelamento confirmado geram aviso para verificação, inclusive quando só informam o preço à vista. Expressões como “10x sem juros” são interpretadas como parcelamento no cartão, salvo quando o anúncio informar outro meio. Se preço e parcelamento aparecerem separados sem associação clara, o alerta mostra o preço anunciado e pede confirmação do total no cartão. Parcelamento com juros não é recomendado; um preço no PIX nunca é convertido em preço no cartão. Quando ambos são informados, o alerta mostra os dois totais. O Gemini não complementa alertas de RAM, evitando sugestões financeiras contraditórias.
+A RAM planejada é 1×16 GB até R$ 1.800, no Pix, usando a reserva à vista; kits 2×16 GB permanecem como alternativa. O limite do kit é R$ 2.400 e pode ser alterado em `metas["DDR5 2x16GB"]`; a meta do módulo único continua independente. Não é necessário informar parcelamento: preço no Pix é priorizado, e pagamento desconhecido gera alerta provisório. Expressões como “10x sem juros” são interpretadas como parcelamento no cartão, salvo quando o anúncio informar outro meio. Se preço e parcelamento aparecerem separados sem associação clara, o alerta mostra o preço anunciado e pede confirmação do total no cartão. Parcelamento com juros não é recomendado; um preço no PIX nunca é convertido em preço no cartão. Quando ambos são informados, o alerta mostra os dois totais. O Gemini não complementa alertas de RAM, evitando sugestões financeiras contraditórias.
 
 ### Compatibilidade e alternativas
 
@@ -202,7 +202,7 @@ O relatório separa reserva PIX, crédito, compras, parcelas por mês, peças fa
 
 O orçamento global **previsto** de R$ 9.450,00 permanece no cadastro, condicionado às entradas planejadas; R$ 5.000 pelo site continuam pendentes. Esse valor não representa saldo disponível nem uma reserva à vista confirmada. O limite do cartão não é receita.
 
-As seis compras totalizam R$ 4.517,47: R$ 2.457,45 à vista e R$ 2.060,02 no cartão para o processador. O desembolso depende das parcelas confirmadas. GPU e RAM são as únicas categorias pendentes; a projeção atual é R$ 11.417,47, incluindo GPU estimada em R$ 5.100 e RAM em R$ 1.800 no cartão sem juros, com renda separada. Consulte [MONTAGEM.md](MONTAGEM.md) para o inventário e a migração.
+As seis compras totalizam R$ 4.517,47: R$ 2.457,45 à vista e R$ 2.060,02 no cartão para o processador. O desembolso depende das parcelas confirmadas. GPU e RAM são as únicas categorias pendentes; a projeção atual é R$ 11.417,47, incluindo GPU estimada em R$ 5.100 e RAM em R$ 1.800 no Pix. Consulte [MONTAGEM.md](MONTAGEM.md) para o inventário e a migração.
 
 A simulação de empréstimo de R$ 2.680, com R$ 659,60 de custo adicional, não é contratação nem saldo disponível. Somente um financiamento explicitamente registrado como contratado e confirmado inclui seus encargos no custo total; as despesas efetivamente pagas também devem ser informadas, sem duplicar o valor das peças.
 
@@ -231,7 +231,7 @@ As demais opções são `CPU`, `GABINETE`, `COOLER-CPU`, `PLACA-MAE` e `SSD`. A 
 
 **Pare o monitor ou a tarefa agendada antes de alterar compras/parcelas**, pois o banco é protegido contra alterações simultâneas durante a execução. Reinicie o monitor após registrar os dados.
 
-O registro exige JSON e `--confirmar`. Exemplo ilustrativo de RAM comprada por R$ 1.800,00 em três parcelas:
+O registro exige JSON e `--confirmar`. Exemplo ilustrativo de RAM comprada por R$ 1.800,00 no Pix (registre somente depois de comprar):
 
 ```powershell
 @'
@@ -239,11 +239,8 @@ O registro exige JSON e `--confirmar`. Exemplo ilustrativo de RAM comprada por R
   "categoria": "RAM",
   "modelo": "Modelo comercial exato da RAM comprada",
   "total_centavos": 180000,
-  "pagamento": "cartao",
-  "juros": "sem_juros",
-  "fonte_pagamento": "renda_pessoal_separada",
-  "parcelas": 3,
-  "primeira_parcela": "2026-11",
+  "pagamento": "pix",
+  "parcelas": 1,
   "parcelas_pagas": 0
 }
 '@ | Set-Content -Encoding UTF8 .\dados\compra-local.json

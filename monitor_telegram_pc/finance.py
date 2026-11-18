@@ -463,6 +463,7 @@ def evaluate_offer(offer: dict, config: dict, purchases: list[dict]) -> dict:
         isinstance(specs, dict) and specs.get('modulos') == 2 and specs.get('capacidade_por_modulo_gb') == 16)
     build = config.get("montagem", DEFAULT_BUILD)
     ram_strict = category == 'RAM' and build.get('RAM', {}).get('parcelamento') == 'cartao_sem_juros'
+    ram_pix = category == 'RAM' and build.get('RAM', {}).get('parcelamento') == 'avista'
     preferred = ('cartao' if ram_strict else 'pix') if category == 'RAM' else build.get(category, {}).get("pagamento", "pix")
     if preferred not in {"pix", "cartao"}:
         raise ValueError("Forma de pagamento inválida na montagem.")
@@ -493,7 +494,7 @@ def evaluate_offer(offer: dict, config: dict, purchases: list[dict]) -> dict:
     # The current build allows RAM à vista; older configurations may retain
     # the user's earlier card-only policy until their migration is applied.
     payment = ('cartao' if ram_strict else 'pix') if category == 'RAM' else ('pix' if category == 'SSD' else preferred)
-    if category == 'RAM' and not ram_strict and offer.get('pix_centavos') is None:
+    if category == 'RAM' and not ram_strict and not ram_pix and offer.get('pix_centavos') is None:
         if offer.get('total_parcelado_sem_juros_centavos') is not None or offer.get('cartao_centavos') is not None:
             payment = 'cartao'
     if category not in {'RAM', 'SSD'} and offer.get(f"{payment}_centavos") is None:
@@ -585,7 +586,10 @@ def evaluate_offer(offer: dict, config: dict, purchases: list[dict]) -> dict:
     if category == 'RAM' and category in build and category not in budget['ja_possui'] and compatible is not False:
         interest = offer.get('parcelamento_sem_juros')
         count = offer.get('parcelas')
-        if ram_strict and interest is False:
+        if ram_pix and price is None:
+            classification = 'VERIFICAR PREÇO NO PIX'
+            reason.insert(0, 'RAM planejada no Pix; preço à vista ainda não confirmado. Não assumir o preço do cartão como Pix.')
+        elif ram_strict and interest is False:
             classification = 'NÃO RECOMENDAR'
             reason.insert(0, 'Parcelamento com juros anunciado; RAM deve ser parcelada sem juros no cartão.')
         elif ram_strict and interest is not True:
