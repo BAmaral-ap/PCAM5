@@ -9,12 +9,12 @@ from pathlib import Path
 from unittest.mock import patch
 
 from finance import budget_snapshot, evaluate_offer
-from inventario import OLD_UPDATE_ID, PURCHASES, UPDATE_ID
+from inventario import OLD_UPDATE_ID, LEGACY_PURCHASES as PURCHASES, UPDATE_ID
 from lojas_dados import _message
 from monitor import main
 from parsing import parse_offers
 from runtime import deliver_pending, make_notifications
-from settings import load_config
+from legacy_config import load_config
 from storage import Store
 
 
@@ -261,7 +261,7 @@ class MigrationTests(unittest.TestCase):
             with Store(db) as store:
                 pending = store.pending_notifications()
                 self.assertEqual(len(pending), 1)
-                self.assertIn('Confira os valores à vista', pending[0]['payload'])
+                self.assertIn('Parcelamento sem juros ainda não confirmado', pending[0]['payload'])
                 self.assertIn('PIX: R$ 1.000,00', pending[0]['payload'])
 
     def test_legacy_ssd_csv_reprocessing_preserves_unknown_target(self):
@@ -304,13 +304,13 @@ class MigrationTests(unittest.TestCase):
             self.assertEqual(updated['montagem']['SSD']['estimativa_pix'], 700)
             self.assertEqual(updated['config_usuario'], {'preservar': True})
             with Store(db) as store:
-                self.assertEqual(len(store.purchases()), 5)
-                self.assertTrue(next(p for p in store.purchases() if p['categoria'] == 'SSD')['monitorar_novamente'])
+                self.assertEqual(len(store.purchases()), 7)
+                self.assertEqual(len([p for p in store.purchases() if p['categoria'] == 'SSD']), 2)
                 self.assertTrue(store.get_meta(UPDATE_ID))
                 report = budget_snapshot(updated, store.purchases())
-                self.assertIn('SSD', {item['categoria'] for item in report['faltantes']})
-                self.assertEqual(report['total_comprado_centavos'], 328800)
-                self.assertEqual(report['fonte_pagamento_ram'], 'a_definir')
+                self.assertNotIn('SSD', {item['categoria'] for item in report['faltantes']})
+                self.assertEqual(report['total_comprado_centavos'], 481747)
+                self.assertEqual(report['fonte_pagamento_ram'], 'renda_pessoal_separada')
                 self.assertIsNone(report['reserva_avista_prevista_centavos'])
 
 

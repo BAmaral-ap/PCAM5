@@ -97,7 +97,7 @@ def make_notifications(store, offer, cfg, purchases, now):
     if offer.get('categoria') == 'VENTOINHA':
         return []
     category = offer.get('categoria')
-    if category in {'CPU', 'FONTE', 'GABINETE', 'COOLER-CPU'} and (
+    if category in {'CPU', 'FONTE', 'GABINETE', 'COOLER-CPU', 'PLACA-MAE', 'SSD'} and (
         cfg.get('montagem', {}).get(category, {}).get('possui', False) or
         any(p.get('categoria') == category and not p.get('monitorar_novamente', False) for p in purchases)
     ):

@@ -31,7 +31,7 @@ O intervalo padrão é de 2 minutos. O notebook precisa estar ligado, conectado 
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-Metas, canais e estimativas ficam em `config.json`. A atualização registra quatro compras, que somam R$ 2.988,00: cooler, gabinete e fonte pagos à vista (R$ 927,98), mais Ryzen 7 9800X3D (R$ 2.060,02 no cartão em seis parcelas). A primeira vence em 10/12/2026; as demais, no dia 10 dos meses seguintes. Os valores de cada parcela são estimativas até conferência da fatura. Permanecem pendentes GPU, placa-mãe, RAM e SSD. O saldo de R$ 6.462,00 da referência prevista de R$ 9.450 não é dinheiro disponível confirmado. No computador que contém o banco existente, pare o monitor e execute:
+Metas, canais e estimativas ficam em `config.json`. A montagem atual tem seis peças compradas por R$ 4.517,47; faltam GPU e RAM. Placa-mãe Maxsun e SSD Kingston foram pagos à vista; o Ryzen permanece em seis parcelas sem juros. Consulte [MONTAGEM.md](monitor_telegram_pc/MONTAGEM.md). No notebook com o banco existente, pare o bot e aplique:
 
 ```powershell
 .\.venv\Scripts\python.exe monitor.py --atualizar-montagem --confirmar

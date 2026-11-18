@@ -121,6 +121,8 @@ class ShopMonitor:
         return await asyncio.to_thread(self.fetch, url)
 
     async def check(self, item):
+        if any(p.get('categoria') == item['categoria'] and not p.get('monitorar_novamente', False) for p in self.tracking.store.purchases()):
+            return False
         key = item['loja']
         lock = self.locks.setdefault(key, asyncio.Lock())
         async with lock:
@@ -247,7 +249,8 @@ class ShopMonitor:
                 continue
             if not watch:
                 return
-            due = [self.tracking.target(item)['next_attempt'] for item in self.items]
+            owned = {p.get('categoria') for p in self.tracking.store.purchases() if not p.get('monitorar_novamente')}
+            due = [self.tracking.target(item)['next_attempt'] for item in self.items if item['categoria'] not in owned]
             seconds = max(1, min(60, min(due, default=self.now()+60)-self.now()))
             try:
                 await asyncio.wait_for(self.event.wait(), timeout=seconds)

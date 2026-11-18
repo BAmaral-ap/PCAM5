@@ -87,6 +87,10 @@ def _same_product(node, target):
         from produtos_validacao import valid_gpu
         if not valid_gpu(name):
             return False
+    if target.get('categoria') == 'RAM' and target.get('descoberto'):
+        from produtos_validacao import valid_ram
+        if not valid_ram(name):
+            return False
     compact = _norm(name)
     if not all(_norm(term) in compact for term in target['termos_identificacao']):
         return False
@@ -221,7 +225,7 @@ def extract_public_offer(html, target):
                         continue
                 except ValueError:
                     continue
-            if target.get('familia') == 'RX 9070 XT':
+            if target.get('familia') == 'RX 9070 XT' or (target.get('categoria') == 'RAM' and target.get('descoberto')):
                 conditions = [product.get('itemCondition'), offer.get('itemCondition')]
                 if any(c and not str(c).endswith('/NewCondition') for c in conditions):
                     continue

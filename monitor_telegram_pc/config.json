@@ -58,12 +58,13 @@
     "RX 9070 16GB": 4200,
     "RX 9070 GRE 12GB": 3600,
     "ASUS B650M-AYW": 680,
-    "DDR5 1x16GB": 1500,
+    "DDR5 1x16GB": 1800,
     "DDR5 2x16GB": 2400,
     "XPG Core Reactor II VE 850W": 490,
     "Air cooler CPU": 200,
     "Gabinete": 250,
-    "SSD NVMe": 700
+    "SSD NVMe": 700,
+    "DDR5 16GB": 1800
   },
   "montagem": {
     "CPU": {
@@ -81,7 +82,7 @@
       "possui": false
     },
     "PLACA-MAE": {
-      "modelo": "ASUS B650M-AYW",
+      "modelo": "Maxsun Terminator B650M WiFi ICE White",
       "estimativa_pix": 680,
       "estimativa_cartao": null,
       "pagamento": "pix",
@@ -89,12 +90,20 @@
     },
     "RAM": {
       "modelo": "DDR5 1x16GB",
-      "estimativa_pix": 1500,
-      "estimativa_cartao": 1500,
-      "pagamento": "indefinido",
+      "estimativa_pix": null,
+      "estimativa_cartao": 1800,
+      "pagamento": "cartao",
       "possui": false,
-      "fonte_pagamento": "a_definir",
-      "parcelamento": "opcional"
+      "fonte_pagamento": "renda_pessoal_separada",
+      "parcelamento": "cartao_sem_juros",
+      "frequencia_preferida_mts": 6000,
+      "latencias_preferidas": [
+        30,
+        32,
+        36,
+        38
+      ],
+      "preferir_expo": true
     },
     "FONTE": {
       "modelo": "Pichau Cluster 850W PG-CL850-BK01",
@@ -118,7 +127,7 @@
       "possui": false
     },
     "SSD": {
-      "modelo": "SSD NVMe",
+      "modelo": "Kingston NV3 1 TB PCIe 4.0",
       "estimativa_pix": 700,
       "estimativa_cartao": null,
       "pagamento": "pix",
@@ -201,9 +210,19 @@
       "certificacao": "Cybenetics Gold",
       "modularidade": "Full modular",
       "compativel": true
+    },
+    "Maxsun Terminator B650M WiFi ICE White": {
+      "socket": "AM5",
+      "tipo_memoria": "DDR5",
+      "slots_memoria": 4,
+      "formato": "MATX"
+    },
+    "Kingston NV3 1 TB PCIe 4.0": {
+      "capacidade_gb": 1000,
+      "interface": "NVMe PCIe 4.0"
     }
   },
-  "observacao_orcamento": "CPU adquirida em 6 parcelas; nenhuma parcela é dada como paga automaticamente. RAM, placa-mãe e SSD podem ser avaliados à vista; empréstimo apenas simulado não é saldo disponível.",
+  "observacao_orcamento": "CPU adquirida em 6 parcelas; nenhuma parcela é dada como paga automaticamente. Seis peças compradas: R$ 4.517,47. Faltam GPU e RAM; RAM planejada no cartão sem juros com renda separada.",
   "gemini": {
     "ativado": true,
     "modelo": "gemini-3.5-flash-lite",
@@ -217,7 +236,7 @@
   },
   "meta_7800x3d_inclui_frete": true,
   "alertar_orcamento_incerto": true,
-  "pcam5_atualizacao_montagem": "montagem-confirmada-2026-11-v3-9800x3d",
+  "pcam5_atualizacao_montagem": "montagem-confirmada-2026-11-v4-maxsun-nv3",
   "descoberta": {
     "ativado": true,
     "intervalo_produto_segundos": 1200,
@@ -242,5 +261,9 @@
         "intervalo_segundos": 7200
       }
     ]
-  }
+  },
+  "prioridades_monitoramento": [
+    "GPU",
+    "RAM"
+  ]
 }

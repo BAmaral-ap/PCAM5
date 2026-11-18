@@ -9,7 +9,8 @@ from lojas_rede import FetchError, _NoRedirect, _retry_after
 QUERIES = ['RX 9070 XT promoção', 'Radeon RX 9070 XT menor preço',
            'RX 9070 XT 16GB comprar', 'RX 9070 XT desconto PIX',
            'RX 9070 XT Black Friday', 'Sapphire RX 9070 XT', 'XFX RX 9070 XT',
-           'PowerColor RX 9070 XT', 'ASRock RX 9070 XT']
+           'PowerColor RX 9070 XT', 'ASRock RX 9070 XT',
+           'DDR5 16GB 6000 EXPO sem juros', 'DDR5 16GB 6000 CL36 comprar']
 
 
 def xml_links(body):

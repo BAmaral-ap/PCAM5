@@ -1,5 +1,7 @@
 # Monitor de promoções para PC AM5
 
+**Estado atualizado em 18/11/2026:** consulte [MONTAGEM.md](MONTAGEM.md). São seis peças compradas, total de R$ 4.517,47, e apenas GPU/RAM pendentes.
+
 O monitor consulta canais públicos com a sessão existente do **Telethon**, extrai ofertas, conserva o histórico em SQLite e envia recomendações ao seu chat privado por um **bot do Telegram**. A coleta e a exportação CSV do projeto foram mantidas e ampliadas. Nenhuma compra, pagamento, entrada em grupo ou registro de compra acontece automaticamente.
 
 Para o monitoramento direto de produtos nas lojas, consulte [LOJAS.md](LOJAS.md). Para descoberta automática de novas URLs, fontes e limites reais de cobertura, consulte [DESCOBERTA.md](DESCOBERTA.md).
@@ -150,7 +152,7 @@ Inicialmente, `excepcional_percentual: 10` exige 10% ou mais abaixo da meta; `bo
 
 As duas primeiras classes e `AVALIAR ALTERNATIVA` notificam por padrão. A triagem ampliada aceita até 25% acima da meta da peça de referência; ajuste `alternativas_gerais.margem_percentual` ou desative `alternativas_gerais.ativado` em `config.json`. Com orçamento pendente, placa-mãe, RAM e SSD ainda podem gerar alerta provisório para verificação. O SSD tem limite próprio de R$ 700; o preço final com frete deve ser confirmado. Preços ou condições ambíguos não entram na triagem de alternativas. Ventoinhas não fazem parte dessa ampliação. Ofertas rejeitadas permanecem no banco.
 
-A RAM pode ser um módulo DDR5 de 1×16 GB ou um kit de 2×16 GB, com pagamento ainda a definir. O limite do kit é R$ 2.400 e pode ser alterado em `metas["DDR5 2x16GB"]`; a meta do módulo único continua independente. Ofertas à vista e com parcelamento não confirmado também são examinadas. Expressões como “10x sem juros” são interpretadas como parcelamento no cartão, salvo quando o anúncio informar outro meio. Se preço e parcelamento aparecerem separados sem associação clara, o alerta mostra o preço anunciado e pede confirmação do total no cartão. Parcelamento com juros não é recomendado; um preço no PIX nunca é convertido em preço no cartão. Quando ambos são informados, o alerta mostra os dois totais. O Gemini não complementa alertas de RAM, evitando sugestões financeiras contraditórias.
+A RAM planejada é 1×16 GB até R$ 1.800, no cartão sem juros com renda separada; kits 2×16 GB permanecem como alternativa. O limite do kit é R$ 2.400 e pode ser alterado em `metas["DDR5 2x16GB"]`; a meta do módulo único continua independente. Ofertas sem parcelamento confirmado geram aviso para verificação, inclusive quando só informam o preço à vista. Expressões como “10x sem juros” são interpretadas como parcelamento no cartão, salvo quando o anúncio informar outro meio. Se preço e parcelamento aparecerem separados sem associação clara, o alerta mostra o preço anunciado e pede confirmação do total no cartão. Parcelamento com juros não é recomendado; um preço no PIX nunca é convertido em preço no cartão. Quando ambos são informados, o alerta mostra os dois totais. O Gemini não complementa alertas de RAM, evitando sugestões financeiras contraditórias.
 
 ### Compatibilidade e alternativas
 
@@ -200,7 +202,7 @@ O relatório separa reserva PIX, crédito, compras, parcelas por mês, peças fa
 
 O orçamento global **previsto** de R$ 9.450,00 permanece no cadastro, condicionado às entradas planejadas; R$ 5.000 pelo site continuam pendentes. Esse valor não representa saldo disponível nem uma reserva à vista confirmada. O limite do cartão não é receita.
 
-As quatro compras totalizam R$ 2.988,00 comprometidos: R$ 927,98 nas três peças à vista e R$ 2.060,02 no cartão para o processador. Sem nenhuma parcela confirmada como paga, o desembolso registrado é R$ 927,98. O saldo de R$ 6.462,00 frente à referência prevista de R$ 9.450 não é caixa disponível. Com as metas e estimativas atuais das quatro peças pendentes, a projeção da montagem é R$ 10.968,00, R$ 1.518,00 acima dessa referência. Os R$ 1.500 para RAM e os R$ 700 para SSD são estimativas, não preços confirmados; a forma de pagamento da RAM permanece indefinida.
+As seis compras totalizam R$ 4.517,47: R$ 2.457,45 à vista e R$ 2.060,02 no cartão para o processador. O desembolso depende das parcelas confirmadas. GPU e RAM são as únicas categorias pendentes; a projeção atual é R$ 11.417,47, incluindo GPU estimada em R$ 5.100 e RAM em R$ 1.800 no cartão sem juros, com renda separada. Consulte [MONTAGEM.md](MONTAGEM.md) para o inventário e a migração.
 
 A simulação de empréstimo de R$ 2.680, com R$ 659,60 de custo adicional, não é contratação nem saldo disponível. Somente um financiamento explicitamente registrado como contratado e confirmado inclui seus encargos no custo total; as despesas efetivamente pagas também devem ser informadas, sem duplicar o valor das peças.
 
@@ -215,15 +217,15 @@ Pare o monitor e, no computador com o banco existente, execute:
 .\.venv\Scripts\python.exe monitor.py --budget
 ```
 
-O comando registra cooler ARCTIC Freezer 36 (R$ 215,81), Montech XR White (R$ 317,12), Pichau Cluster 850W (R$ 395,05) e Ryzen 7 9800X3D (R$ 2.060,02 em 6 vezes sem juros). Ele reconhece compras já registradas, não duplica os registros e interrompe ao encontrar conflitos que não possa conciliar com segurança. A fonte fica paga e comprada, com entrega em preparação. O gabinete é registrado como `avista` porque a forma específica não foi informada. Histórico anterior de SSD é preservado sem presumir que o item ainda está disponível. O comando preserva canais e configurações personalizadas; uma repetição não desfaz reativações posteriores.
+O comando registra cooler ARCTIC Freezer 36 (R$ 215,81), Montech XR White (R$ 317,12), Pichau Cluster 850W (R$ 395,05) Ryzen 7 9800X3D (R$ 2.060,02 em 6 vezes sem juros), Maxsun B650M WiFi ICE (R$ 718,47) e Kingston NV3 1 TB (R$ 811,00). Ele reconhece compras já registradas, não duplica os registros e interrompe ao encontrar conflitos que não possa conciliar com segurança. A fonte fica paga e comprada, com entrega em preparação. O gabinete é registrado como `avista` porque a forma específica não foi informada. Histórico anterior de SSD é preservado sem presumir que o item ainda está disponível. O comando preserva canais e configurações personalizadas; uma repetição não desfaz reativações posteriores.
 
-CPU, fonte, gabinete e coolers deixam de gerar alertas de compra, enquanto GPU, placa-mãe, RAM e SSD NVMe continuam. Priorize SSDs de 1 TB ou 500 GB até R$ 700 e confira o frete. Quando a velocidade da RAM é identificada, o alerta destaca a faixa preferida de 5600–6000 MT/s e reproduz a unidade anunciada; uma opção fora da faixa não é descartada automaticamente nem se exige CL30. Para reativar uma categoria sem apagar o histórico nem presumir estorno, pare o monitor e use, por exemplo:
+CPU, placa-mãe, SSD, fonte, gabinete e coolers deixam de gerar alertas de compra; GPU e RAM continuam. Priorize SSDs de 1 TB ou 500 GB até R$ 700 e confira o frete. Quando a velocidade da RAM é identificada, o alerta destaca a faixa preferida de 5600–6000 MT/s e reproduz a unidade anunciada; uma opção fora da faixa não é descartada automaticamente nem se exige CL30. Para reativar uma categoria sem apagar o histórico nem presumir estorno, pare o monitor e use, por exemplo:
 
 ```powershell
 .\.venv\Scripts\python.exe monitor.py --reativar-categoria FONTE --confirmar
 ```
 
-As demais opções são `CPU`, `GABINETE` e `COOLER-CPU`. A reativação adiciona novamente a categoria às peças faltantes e mantém o gasto anterior. O gabinete oferece 420 mm para GPU e 175 mm para cooler; o ARCTIC tem 159 mm. A fonte é de 850 W. Dimensões específicas da GPU, potência recomendada e quantidade dos conectores ainda precisam ser confirmadas por modelo.
+As demais opções são `CPU`, `GABINETE`, `COOLER-CPU`, `PLACA-MAE` e `SSD`. A reativação adiciona novamente a categoria às peças faltantes e mantém o gasto anterior. O gabinete oferece 420 mm para GPU e 175 mm para cooler; o ARCTIC tem 159 mm. A fonte é de 850 W. Dimensões específicas da GPU, potência recomendada e quantidade dos conectores ainda precisam ser confirmadas por modelo.
 
 ### Registrar uma compra que você já fez
 

@@ -204,3 +204,15 @@ class PublicAccessTests(unittest.IsolatedAsyncioTestCase):
         await new.validate(row)
         self.assertEqual(self.calls,[])
         self.assertGreater(self.monitor.tracking.host('loja:kabum')['paused_until'],self.clock.now())
+
+class RamDiscoveryTests(unittest.IsolatedAsyncioTestCase):
+    setUp = DiscoveryTests.setUp
+    async def test_ram_link_discovers_and_alerts_without_claiming_interest_free(self):
+        self.page=html('1700',product_name='Corsair DDR5 1x16GB 6000 CL38')
+        self.cfg['montagem']={'RAM':{'parcelamento':'cartao_sem_juros'}}
+        self.monitor.discovery.ingest('https://www.kabum.com.br/produto/888/corsair-ddr5-16gb','telegram')
+        await self.monitor.discovery.tick()
+        ram=[item for item in self.monitor.items if item['categoria']=='RAM']
+        self.assertTrue(ram)
+        self.assertEqual(ram[0]['meta_centavos'],180000)
+        self.assertIn('Parcelamento sem juros ainda não confirmado',self.store.notifications()[0]['payload'])

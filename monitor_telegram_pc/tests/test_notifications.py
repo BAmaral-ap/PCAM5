@@ -9,7 +9,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from notifications import BotNotifier, DeliveryError, format_alert
 from monitor import demo
-from settings import load_config
+from legacy_config import load_config
 
 
 class NotificationTests(unittest.TestCase):

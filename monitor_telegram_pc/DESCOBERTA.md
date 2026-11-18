@@ -1,4 +1,6 @@
-# Descoberta de anúncios RX 9070 XT
+# Descoberta de anúncios RX 9070 XT e RAM DDR5
+
+A montagem atual busca apenas GPU e RAM, conforme [MONTAGEM.md](MONTAGEM.md). RAM descoberta precisa ser DDR5 de 16 GB por módulo, 1×16 GB ou a alternativa 2×16 GB; não admite SODIMM nem kits de quatro módulos. Novas buscas de memória complementam as consultas prioritárias de GPU.
 
 A expansão usa o mesmo SQLite, agendador de lojas, controle por domínio e fila Telegram. Não altera compras, sessões, canais ou metas existentes. As faixas anteriores (IMPERDÍVEL, EXCELENTE, BOA COMPRA, AVALIAR) continuam configuráveis; os anúncios descobertos usam R$ 5.300 como limite inicial de triagem. O preço inclui frete quando há indicação pública específica para Belém.
 

@@ -12,7 +12,7 @@ from lojas_rede import DOMAINS, FetchError, product_url, robots_allows, requires
 from lojas_extracao import ExtractionError, extract_public_offer, _Scripts, _nodes, _type
 
 LOG = logging.getLogger('pcam5.descoberta')
-from produtos_validacao import RX, valid_gpu
+from produtos_validacao import RX, valid_gpu, valid_ram
 
 
 def public_host(url):
@@ -110,7 +110,7 @@ class Discovery:
             return
 
     def telegram(self, text):
-        if not self.cfg.get('ativado', False) or not valid_gpu(text.split('\n')[0]):
+        if not self.cfg.get('ativado', False) or not (valid_gpu(text.split('\n')[0]) or valid_ram(text.split('\n')[0])):
             return
         for url in re.findall(r'https://[^\s<>]+', text):
             self.ingest(url.rstrip('.,;)]}>\"\''), 'telegram')
@@ -187,7 +187,7 @@ class Discovery:
                         _, found = xml_links(await self.public_read(child, source['loja']))
                         links.extend(found)
                 if source['tipo'] in {'sitemap', 'robots_sitemaps'}:
-                    links = [link for link in links if RX.search(unquote(link).replace('/', ' '))]
+                    links = [link for link in links if (RX.search(unquote(link).replace('/', ' ')) or valid_ram(unquote(link).replace('-', ' ')))]
             else:
                 raise ValueError('Tipo de fonte desconhecido')
             for url in links[:500]:
@@ -222,7 +222,7 @@ class Discovery:
                 except (ValueError, RecursionError):
                     continue
                 for product in nodes:
-                    if not _type(product, 'Product') or not valid_gpu(product.get('name')):
+                    if not _type(product, 'Product') or not (valid_gpu(product.get('name')) or valid_ram(product.get('name'))):
                         continue
                     name = product['name']
                     if re.search(r'(?i)\b(?:usado|usada|recondicionado|refurbished|open box)\b', str(product.get('description', ''))):
@@ -237,6 +237,10 @@ class Discovery:
                             'termos_identificacao': ['9070', 'XT'], 'meta_centavos': 530000,
                             'intervalo_segundos': max(900, int(self.cfg.get('intervalo_produto_segundos', 1200))),
                             'descoberto': True, 'condicao': 'novo' if any(conditions) else 'não informada'}
+                    if valid_ram(name):
+                        kit = bool(re.search(r'(?i)2\s*[x×]\s*16\s*gb', name))
+                        item.update(categoria='RAM', familia='DDR5', termos_identificacao=['DDR5','16'],
+                                    meta_centavos=int(self.monitor.config.get('metas', {}).get('DDR5 2x16GB' if kit else 'DDR5 1x16GB', 2400 if kit else 1800)*100))
                     sku = product.get('sku') or product.get('mpn')
                     if isinstance(sku, str) and re.fullmatch(r'[A-Za-z0-9._-]{1,80}', sku):
                         item['sku'] = sku
@@ -250,8 +254,8 @@ class Discovery:
             item = matches[0]
             self.monitor.tracking.sync([item])
             self.monitor.tracking.started(item, self.monitor.now())
-            owned = any(p.get('categoria') == 'GPU' and not p.get('monitorar_novamente') for p in self.store.purchases())
-            owned = owned or self.monitor.config.get('montagem', {}).get('GPU', {}).get('possui', False)
+            owned = any(p.get('categoria') == item['categoria'] and not p.get('monitorar_novamente') for p in self.store.purchases())
+            owned = owned or self.monitor.config.get('montagem', {}).get(item['categoria'], {}).get('possui', False)
             self.monitor.tracking.success(item, self.monitor.now(), observation, self.monitor.config,
                 notify=self.monitor.notifications_enabled and not owned, reduction=self.monitor.catalog.get('queda_minima_percentual', 5))
             with self.db:

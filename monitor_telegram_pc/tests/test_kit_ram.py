@@ -7,10 +7,10 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from finance import evaluate_offer
-from inventario import PURCHASES
+from inventario import LEGACY_PURCHASES as PURCHASES
 from parsing import parse_offers
 from runtime import collect_once, make_notifications
-from settings import load_config
+from legacy_config import load_config
 from storage import Store
 
 

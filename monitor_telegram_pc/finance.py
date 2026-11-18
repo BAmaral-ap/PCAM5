@@ -113,7 +113,7 @@ def budget_snapshot(config: dict, purchases: list[dict], candidate: dict | None 
     # Total project ceiling, not a spending target. Paying a credit-card bill
     # restores the revolving limit but never increases this assembly budget.
     total_cap = cents(limits["total_maximo"]) if limits.get("total_maximo") is not None else None
-    bought = [validate_purchase(p) for p in purchases]
+    bought = [validate_purchase(p) for p in purchases if p.get("status_compra") != "SIMULACAO"]
     spent_pix = sum(p["total_centavos"] for p in bought if p["pagamento"] == "pix")
     spent_other_cash = sum(p["total_centavos"] for p in bought if p["pagamento"] == "avista")
     spent = spent_pix + spent_other_cash
@@ -603,6 +603,8 @@ def evaluate_offer(offer: dict, config: dict, purchases: list[dict]) -> dict:
         elif not ram_strict and payment == 'cartao' and interest is None and type(count) is int and count > 1:
             classification = 'VERIFICAR PAGAMENTO'
             reason.insert(0, 'Condições e possíveis juros do parcelamento não informados; confira também o preço à vista.')
+        if build.get('RAM', {}).get('preferir_expo'):
+            reason.append('Preferência: DDR5-6000, CL30/32/36/38 e AMD EXPO; confirme suporte com Ryzen 7 9800X3D e Maxsun B650M WiFi ICE. Começar com 1×16 GB; quatro slots não exigem quatro módulos.')
         if ram_strict and payment == 'cartao':
             reason.append('RAM: parcelas pagas com renda pessoal separada da reserva à vista.')
     return {"classificacao": classification, "justificativa": reason,

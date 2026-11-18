@@ -49,9 +49,9 @@ class ConfirmedBuildTests(unittest.TestCase):
     def test_migration_is_idempotent_preserves_existing_cooler_and_config(self):
         report = self.migrate()
         items = report['compras']
-        self.assertEqual(len(items), 4)
+        self.assertEqual(len(items), 6)
         self.assertEqual(items[0]['id'], 1)
-        self.assertEqual([p['total_centavos'] for p in items], [21581, 31712, 39505, 206002])
+        self.assertEqual([p['total_centavos'] for p in items], [21581, 31712, 39505, 206002, 71847, 81100])
         self.assertEqual(items[1]['pagamento'], 'avista')
         self.assertEqual(items[2]['pagamento'], 'pix')
         self.assertEqual(items[2]['status_financeiro'], 'pago')
@@ -67,28 +67,28 @@ class ConfirmedBuildTests(unittest.TestCase):
         self.assertEqual(code, 0, text)
         self.assertEqual(json.loads(self.config.read_text(encoding='utf-8'))['metas']['RX 9070 XT 16GB'], 5099)
         with Store(self.db) as store:
-            self.assertEqual(len(store.purchases()), 4)
+            self.assertEqual(len(store.purchases()), 6)
             self.assertEqual(store.notifications(), [])
 
     def test_budget_tracks_forecast_separately_from_cash_and_future_costs(self):
         report = self.migrate()['orcamento']
         self.assertEqual(report['teto_total_centavos'], 945000)
-        self.assertEqual(report['total_comprado_centavos'], 298800)
-        self.assertEqual(report['despesas_pagas_centavos'], 92798)
-        self.assertEqual(report['despesas_contratadas_centavos'], 298800)
-        self.assertEqual(report['saldo_previsto_restante_centavos'], 646200)
+        self.assertEqual(report['total_comprado_centavos'], 451747)
+        self.assertEqual(report['despesas_pagas_centavos'], 245745)
+        self.assertEqual(report['despesas_contratadas_centavos'], 451747)
+        self.assertEqual(report['saldo_previsto_restante_centavos'], 493253)
         self.assertIsNone(report['saldo_pix_centavos'])
         self.assertEqual(report['gasto_pix_centavos'], 61086)
-        self.assertEqual(report['gasto_avista_sem_meio_centavos'], 31712)
+        self.assertEqual(report['gasto_avista_sem_meio_centavos'], 184659)
         self.assertEqual(report['entradas_pendentes'][0]['valor_centavos'], 500000)
         self.assertEqual(report['entradas_pendentes'][0]['status'], 'pendente')
-        self.assertEqual({p['categoria'] for p in report['faltantes']}, {'GPU', 'PLACA-MAE', 'RAM', 'SSD'})
-        self.assertEqual(next(p for p in report['faltantes'] if p['categoria'] == 'RAM')['pagamento'], 'indefinido')
-        self.assertEqual(report['total_projetado_centavos'], 1096800)
-        self.assertIsNone(report['projecao_total_avista_centavos'])
-        self.assertIsNone(report['projecao_total_cartao_centavos'])
-        self.assertEqual(report['restante_pagamento_indefinido_centavos'], 150000)
-        self.assertEqual(report['folga_teto_centavos'], -151800)
+        self.assertEqual({p['categoria'] for p in report['faltantes']}, {'GPU', 'RAM'})
+        self.assertEqual(next(p for p in report['faltantes'] if p['categoria'] == 'RAM')['pagamento'], 'cartao')
+        self.assertEqual(report['total_projetado_centavos'], 1141747)
+        self.assertEqual(report['projecao_total_avista_centavos'], 755745)
+        self.assertEqual(report['projecao_total_cartao_centavos'], 386002)
+        self.assertEqual(report['restante_pagamento_indefinido_centavos'], 0)
+        self.assertEqual(report['folga_teto_centavos'], -196747)
 
     def test_conflicting_purchase_aborts_atomically(self):
         with Store(self.db) as store:
@@ -109,7 +109,7 @@ class ConfirmedBuildTests(unittest.TestCase):
         with Store(self.db) as store:
             psu = next(p for p in store.purchases() if p['categoria'] == 'FONTE')
             self.assertTrue(psu['monitorar_novamente'])
-            self.assertEqual(sum(p['total_centavos'] for p in store.purchases()), 298800)
+            self.assertEqual(sum(p['total_centavos'] for p in store.purchases()), 451747)
 
     def test_existing_queued_purchased_part_expires_without_deleting_history(self):
         now = datetime.now(timezone.utc)
@@ -156,12 +156,10 @@ class ConfirmedBuildTests(unittest.TestCase):
                 self.assertTrue(offers, text)
                 return [n for offer in offers for n in make_notifications(store, offer, cfg, store.purchases(), now)]
             for title in ('Fonte Gamer 850W', 'Gabinete Gamer ATX', 'Air cooler CPU', 'Water cooler CPU',
-                          'Ryzen 7 7800X3D', 'Ryzen 7 9800X3D'):
+                          'Ryzen 7 7800X3D', 'Ryzen 7 9800X3D', 'Placa mãe MSI B650M DDR5 AM5', 'SSD NVMe M.2 1TB'):
                 with self.subTest(title=title):
                     self.assertEqual(alerts(title + '\nPreço: R$ 150'), [])
-            for text in ('Placa mãe MSI B650M DDR5 AM5 R$ 650 no PIX',
-                         'Memória DDR5 16GB R$ 1200 no cartão',
-                         'SSD NVMe M.2 1TB R$ 650 no PIX',
+            for text in ('Memória DDR5 16GB R$ 1200 no cartão',
                          'XFX RX 9070 XT 16GB\nR$ 3.978\nhttps://amzn.to/exemplo'):
                 with self.subTest(text=text):
                     self.assertTrue(alerts(text))

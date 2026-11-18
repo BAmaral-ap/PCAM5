@@ -9,16 +9,20 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from finance import _compatibility, budget_snapshot
-from inventario import PREVIOUS_UPDATE_ID, PURCHASES, UPDATE_ID, apply_confirmed, updated_config
+from inventario import PREVIOUS_UPDATE_ID, LEGACY_PURCHASES as PURCHASES, UPDATE_ID, apply_confirmed, updated_config
+from unittest.mock import patch
 from monitor import main
 from parsing import parse_offers
 from runtime import make_notifications
-from settings import load_config
+from legacy_config import load_config
 from storage import Store
 
 
 class RyzenPurchaseTests(unittest.TestCase):
     def setUp(self):
+        patcher = patch("inventario.PURCHASES", PURCHASES)
+        patcher.start()
+        self.addCleanup(patcher.stop)
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.path = Path(self.tmp.name)

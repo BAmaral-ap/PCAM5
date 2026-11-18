@@ -345,7 +345,7 @@ class SchedulerTests(unittest.IsolatedAsyncioTestCase):
         self.store.add_purchase({'categoria':'GPU','modelo':'RX 9070 XT','total_centavos':500000,'pagamento':'pix','parcelas':1,'parcelas_pagas':0})
         monitor=self.make(fetch);await monitor.check_due()
         self.assertEqual(self.store.pending_notifications(),[])
-        self.assertEqual(monitor.tracking.status([ITEM])[0]['ultima_observacao']['preco_publico_centavos'],500000)
+        self.assertIsNone(monitor.tracking.status([ITEM])[0]['ultima_observacao'])
     async def test_reactivated_category_can_alert_again(self):
         def fetch(url):
             return Response(200,ROBOTS,'text/plain') if url.endswith('/robots.txt') else Response(200,html('5000'),'text/html')
@@ -412,7 +412,7 @@ class SchedulerTests(unittest.IsolatedAsyncioTestCase):
                               sleep=self.clock.sleep, jitter=lambda:0)
         await monitor.check_due()
         self.assertEqual(self.store.pending_notifications(), [])
-        self.assertEqual(len(monitor.tracking.history(cpu)), 1)
+        self.assertEqual(len(monitor.tracking.history(cpu)), 0)
         reactivate(self.store, 'CPU')
         price[0] = '1600'
         self.clock.t += 180

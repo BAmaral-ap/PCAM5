@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from parsing import parse_offers
 from runtime import make_notifications
-from settings import load_config
+from legacy_config import load_config
 from storage import Store
 
 class PrecoAnunciado(unittest.TestCase):

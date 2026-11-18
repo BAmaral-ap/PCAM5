@@ -270,6 +270,8 @@ class StoreTracking:
             row = self.target(item)
             if row:
                 result.append({'id': item['id'], 'nome': item['nome'], 'url': item['url'],
+                               'categoria': item['categoria'],
+                               'monitoramento': 'pausado_comprado' if any(p.get('categoria') == item['categoria'] and not p.get('monitorar_novamente') for p in self.store.purchases()) else 'ativo',
                                'sku': item.get('sku'), 'sku_loja': item.get('sku_loja'),
                                'intervalo_segundos': item['intervalo_segundos'],
                                'meta_centavos': item['meta_centavos'],

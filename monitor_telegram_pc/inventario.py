@@ -10,7 +10,8 @@ from finance import validate_purchase
 
 OLD_UPDATE_ID = 'montagem-confirmada-2026-11-v1'
 PREVIOUS_UPDATE_ID = 'montagem-confirmada-2026-11-v2-ram-ssd'
-UPDATE_ID = 'montagem-confirmada-2026-11-v3-9800x3d'
+CPU_UPDATE_ID = 'montagem-confirmada-2026-11-v3-9800x3d'
+UPDATE_ID = 'montagem-confirmada-2026-11-v4-maxsun-nv3'
 PURCHASES = [
     {'ref_confirmacao':'cooler-2026-11', 'categoria':'COOLER-CPU', 'modelo':'ARCTIC Freezer 36 A-RGB Black',
      'total_centavos':21581, 'pagamento':'pix', 'parcelas':1, 'parcelas_pagas':0,
@@ -30,6 +31,17 @@ PURCHASES = [
      'rateio_estimado':True, 'valores_pagos_centavos':[],
      'juros':'sem_juros', 'data_compra':'2026-11-11', 'frete_incluido':True,
      'status_financeiro':'parcelado', 'status_compra':'COMPRADO', 'status_entrega':'não informado'},
+]
+LEGACY_PURCHASES = copy.deepcopy(PURCHASES)
+PURCHASES += [
+    {'ref_confirmacao':'maxsun-b650m-2026-11', 'categoria':'PLACA-MAE',
+     'modelo':'Maxsun Terminator B650M WiFi ICE White', 'total_centavos':71847,
+     'pagamento':'avista', 'parcelas':1, 'parcelas_pagas':0,
+     'status_compra':'COMPRADO', 'status_financeiro':'pago', 'frete_incluido':True},
+    {'ref_confirmacao':'kingston-nv3-1tb-2026-11', 'categoria':'SSD',
+     'modelo':'Kingston NV3 1 TB PCIe 4.0', 'total_centavos':81100,
+     'pagamento':'avista', 'parcelas':1, 'parcelas_pagas':0,
+     'status_compra':'COMPRADO', 'status_financeiro':'pago', 'frete_incluido':True},
 ]
 
 
@@ -52,14 +64,14 @@ def updated_config(config):
     if not site_confirmed and not any(site(entry) for entry in pending):
         pending.append({'descricao':'desenvolvimento de site', 'valor_centavos':500000,
                         'status':'pendente', 'incluida_no_previsto':True})
-    if previous_update not in {OLD_UPDATE_ID, PREVIOUS_UPDATE_ID, UPDATE_ID}:
+    if previous_update not in {OLD_UPDATE_ID, PREVIOUS_UPDATE_ID, CPU_UPDATE_ID, UPDATE_ID}:
         limits.update(pix=None, total_maximo=9450, previsto_total=9450)
     limits['entradas_pendentes'] = pending
     if confirmed:
         limits['entradas_confirmadas'] = confirmed
     metas = cfg.setdefault('metas', {})
     metas.setdefault('DDR5 2x16GB', 2400)
-    if previous_update not in {OLD_UPDATE_ID, PREVIOUS_UPDATE_ID, UPDATE_ID}:
+    if previous_update not in {OLD_UPDATE_ID, PREVIOUS_UPDATE_ID, CPU_UPDATE_ID, UPDATE_ID}:
         metas['Ryzen 7 7800X3D'] = 1750
     metas['SSD NVMe'] = 700
     cfg['meta_7800x3d_inclui_frete'] = True
@@ -71,7 +83,7 @@ def updated_config(config):
         build.setdefault(category, {})['modelo'] = model
         # Purchase ledger is the single source of truth for acquisition status.
         build[category]['possui'] = False
-    if previous_update not in {OLD_UPDATE_ID, PREVIOUS_UPDATE_ID, UPDATE_ID}:
+    if previous_update not in {OLD_UPDATE_ID, PREVIOUS_UPDATE_ID, CPU_UPDATE_ID, UPDATE_ID}:
         if 'GPU' in build: build['GPU']['estimativa_pix'] = 5100
     cpu = build.setdefault('CPU', {})
     cpu.update(modelo='Ryzen 7 9800X3D', possui=False, pagamento='cartao',
@@ -79,7 +91,7 @@ def updated_config(config):
     memory = build.setdefault('RAM', {})
     memory.update(pagamento='indefinido', fonte_pagamento='a_definir', parcelamento='opcional')
     ssd = build.setdefault('SSD', {})
-    if previous_update not in {PREVIOUS_UPDATE_ID, UPDATE_ID}:
+    if previous_update not in {PREVIOUS_UPDATE_ID, CPU_UPDATE_ID, UPDATE_ID}:
         if ssd.get('possui', False) or not ssd.get('estimativa_pix'):
             ssd['estimativa_pix'] = 700
         if ssd.get('possui', False):
@@ -87,8 +99,18 @@ def updated_config(config):
         ssd.update(modelo='SSD NVMe', possui=False, pagamento='pix')
     else:
         ssd.setdefault('estimativa_pix', 700)
+    build.setdefault('GPU', {})['possui'] = False
+    memory.update(modelo='DDR5 1x16GB', possui=False, pagamento='cartao', fonte_pagamento='renda_pessoal_separada',
+                  parcelamento='cartao_sem_juros', estimativa_cartao=1800, estimativa_pix=None,
+                  frequencia_preferida_mts=6000, latencias_preferidas=[30,32,36,38], preferir_expo=True)
+    metas['DDR5 16GB'] = metas['DDR5 1x16GB'] = 1800
+    for category, model in [('PLACA-MAE','Maxsun Terminator B650M WiFi ICE White'), ('SSD','Kingston NV3 1 TB PCIe 4.0')]:
+        build.setdefault(category, {}).update(modelo=model, possui=False)
+    cfg['prioridades_monitoramento'] = ['GPU','RAM']
     profiles=cfg.setdefault('perfis', {})
     confirmed_profiles = {
+        'Maxsun Terminator B650M WiFi ICE White': {'socket':'AM5', 'tipo_memoria':'DDR5', 'slots_memoria':4, 'formato':'MATX'},
+        'Kingston NV3 1 TB PCIe 4.0': {'capacidade_gb':1000,'interface':'NVMe PCIe 4.0'},
         'Ryzen 7 9800X3D': {'socket':'AM5', 'arquitetura':'Zen 5', 'nucleos':8,
                             'threads':16, 'sku':'100-100001084WOF', 'compativel':True},
         'ARCTIC Freezer 36 A-RGB Black': {'altura_mm':159, 'sockets':['AM5'], 'compativel':True},
@@ -103,7 +125,7 @@ def updated_config(config):
         for key, value in facts.items():
             profile.setdefault(key, value)
     cfg['observacao_orcamento'] = ('CPU adquirida em 6 parcelas; nenhuma parcela é dada como paga automaticamente. '
-        'RAM, placa-mãe e SSD podem ser avaliados à vista; empréstimo apenas simulado não é saldo disponível.')
+        'Seis peças compradas: R$ 4.517,47. Faltam GPU e RAM; RAM planejada no cartão sem juros com renda separada.')
     finance = limits.setdefault('financiamentos', [])
     if not isinstance(finance, list):
         raise ValueError('Financiamentos precisam estar em uma lista; confira o orçamento.')
@@ -125,7 +147,7 @@ def _is_same(existing, wanted):
         return False
     name = _norm(existing.get('modelo',''))
     reference = {'COOLER-CPU':'arcticfreezer36', 'GABINETE':'montechxrwhite',
-                 'FONTE':'pichaucluster850w', 'CPU':'9800x3d'}[wanted['categoria']]
+                 'FONTE':'pichaucluster850w', 'CPU':'9800x3d', 'PLACA-MAE':'maxsunterminatorb650mwifiice', 'SSD':'kingstonnv3'}[wanted['categoria']]
     identifiers = _norm(' '.join(str(existing.get(k, '')) for k in ('sku', 'referencia', 'modelo')))
     if wanted['categoria'] == 'COOLER-CPU' and 'acfre00124a' in identifiers:
         return True
@@ -139,6 +161,8 @@ def _is_same(existing, wanted):
             return True
         if not any(c in name or c == colour for c in ('black', 'preto')):
             raise ValueError('Gabinete Montech XR já registrado sem cor identificada; confira --budget antes de atualizar.')
+    if wanted['categoria'] == 'SSD':
+        return reference in name and ('1tb' in name or '1000gb' in name)
     return reference in name
 
 
@@ -147,7 +171,7 @@ def _refresh_pending(store, cfg=None):
     db = store.db
     # Categorias que o usuário reativou continuam aptas a receber alertas.
     owned = {p.get('categoria') for p in store.purchases() if not p.get('monitorar_novamente', False)}
-    categories = (owned & {'CPU', 'FONTE', 'GABINETE', 'COOLER-CPU'}) | {'RAM'}
+    categories = (owned & {'CPU', 'FONTE', 'GABINETE', 'COOLER-CPU', 'PLACA-MAE', 'SSD'}) | {'RAM'}
     offers = [json.loads(row['payload']) for row in db.execute('SELECT payload FROM offers')]
     shop_items = []
     if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='shop_targets'").fetchone():
@@ -163,6 +187,13 @@ def _refresh_pending(store, cfg=None):
             item.get('categoria') in categories and item.get('nome') and item.get('url') and
             ('Produto: ' + item['nome'] + '\n') in payload and item['url'] in payload
         ), None)
+        if ((telegram_match and telegram_match.get('categoria') == 'RAM'
+                and 'corsair' in (telegram_match.get('nome_completo') or '').lower()
+                and 180285 in [telegram_match.get(k) for k in ('anunciado_centavos','pix_centavos','cartao_centavos')])
+                or (shop_match and shop_match.get('categoria') == 'RAM' and 'corsair' in shop_match['nome'].lower() and re.search(r'Preço (?:público|PIX|cartão) atual: R\$ 1\.802,85', payload))):
+            db.execute("UPDATE notifications SET state='expired',updated_at=? WHERE id=?",
+                       (datetime.now(timezone.utc).isoformat(), row['id']))
+            continue
         if telegram_match and telegram_match['categoria'] == 'RAM' and cfg is not None:
             try:
                 from parsing import parse_offers
@@ -211,7 +242,6 @@ def apply_confirmed(store, config=None):
         db.execute('BEGIN IMMEDIATE')
         existing=store.purchases()
         first_update = not store.get_meta(UPDATE_ID)
-        first_legacy_update = not store.get_meta(PREVIOUS_UPDATE_ID) and first_update
         ops=[]
         for raw in PURCHASES:
             wanted=validate_purchase(raw)
@@ -250,7 +280,7 @@ def apply_confirmed(store, config=None):
                 for key,value in wanted.items():
                     if key == 'modelo' or key not in merged:
                         merged[key]=value
-                if first_legacy_update:
+                if first_update:
                     merged.pop('monitorar_novamente', None)
                 ops.append(('update',old['id'],merged))
             else:
@@ -262,11 +292,13 @@ def apply_confirmed(store, config=None):
                 db.execute('UPDATE purchases SET payload=? WHERE id=?',(encoded,ident))
             else:
                 db.execute('INSERT INTO purchases(payload,created_at) VALUES (?,?)',(encoded,now))
-        if first_legacy_update:
+        if first_update:
             for old in existing:
-                if old.get('categoria') in {'SSD', 'RAM'} and not old.get('monitorar_novamente', False):
+                if old.get('categoria') in {'GPU', 'RAM'}:
                     ident = old.pop('id')
                     old['monitorar_novamente'] = True
+                    if old.get('categoria') == 'GPU' and old.get('total_centavos') == 593314:
+                        old['status_compra'] = 'SIMULACAO'
                     db.execute('UPDATE purchases SET payload=? WHERE id=?',
                                (json.dumps(old,ensure_ascii=False,sort_keys=True,separators=(',',':')), ident))
         _refresh_pending(store, config)
@@ -276,7 +308,7 @@ def apply_confirmed(store, config=None):
 
 def reactivate(store, category):
     """Allow upgrades without deleting purchases or assuming a refund."""
-    if category not in {'CPU','FONTE','GABINETE','COOLER-CPU'}:
+    if category not in {'CPU','FONTE','GABINETE','COOLER-CPU','PLACA-MAE','SSD'}:
         raise ValueError('Categoria não suportada para reativação.')
     db=store.db
     with db:

@@ -220,7 +220,7 @@ def main(argv=None):
     actions.add_argument('--pay-installment', type=int, metavar='ID', help='Registrar parcela já paga; exige --confirmar')
     parser.add_argument('--valor-pago-centavos', type=int, help='Valor efetivamente pago em centavos para --pay-installment')
     actions.add_argument('--atualizar-montagem', action='store_true', help='Registrar compras confirmadas e atualizar orçamento; exige --confirmar')
-    actions.add_argument('--reativar-categoria', choices=['CPU', 'FONTE', 'GABINETE', 'COOLER-CPU'], help='Voltar a monitorar categoria adquirida; exige --confirmar')
+    actions.add_argument('--reativar-categoria', choices=['CPU', 'FONTE', 'GABINETE', 'COOLER-CPU', 'PLACA-MAE', 'SSD'], help='Voltar a monitorar categoria adquirida; exige --confirmar')
     actions.add_argument('--notifications-status', action='store_true')
     actions.add_argument('--lojas', action='store_true', help='Consultar apenas lojas configuradas; --watch mantém em execução')
     actions.add_argument('--descoberta-status', action='store_true', help='Diagnóstico das fontes e URLs descobertas')
