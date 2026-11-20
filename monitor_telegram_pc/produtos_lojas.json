@@ -73,6 +73,32 @@
         "prioridade_centavos": 640000,
         "queda_centavos": 10000
       }
+    },
+    {
+      "id": "kabum-asus-prime-9070xt-690385",
+      "nome": "ASUS Prime Radeon RX 9070 XT O16G",
+      "loja": "kabum",
+      "categoria": "GPU",
+      "familia": "RX 9070 XT",
+      "url": "https://www.kabum.com.br/produto/690385/placa-de-video-asus-prime-rx-9070-xt-o16g-amd-radeon-16gb-gddr6-axial-tech-opengl-4-6-90yv0l71-m0na00",
+      "sku": "90YV0L71-M0NA00",
+      "sku_loja": "690385",
+      "termos_identificacao": [
+        "ASUS",
+        "Prime",
+        "9070",
+        "XT"
+      ],
+      "meta_centavos": 550000,
+      "intervalo_segundos": 300,
+      "cupons": [],
+      "monitoramento_asus": {
+        "cupom": "ZAFADINHO13",
+        "desconto_percentual": 13,
+        "frete_referencia_centavos": 7676,
+        "limite_interessante_centavos": 580000,
+        "queda_centavos": 100
+      }
     }
   ]
 }
